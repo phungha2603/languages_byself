@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users & IELTS stage progression
+// ---------------------------------------------------------------------------
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  displayName    String
+  createdAt      DateTime @default(now())
+  currentStageId String
+  targetBand     Float?
+
+  stageProgress     UserStageProgress[]
+  exerciseAttempts  ExerciseAttempt[]
+  srsCards          SrsCard[]
+  studySessions     StudySession[]
+  weaknessSnapshots WeaknessProfileSnapshot[]
+  bandEvaluations   BandExitEvaluationLog[]
+  skillDifficulties UserSkillDifficulty[]
+}
+
+/// Per-skill difficulty dial the orchestrator tunes after every attempt
+/// (packages/orchestrator's adjustDifficulty). Seeded at 3/10 for new users.
+model UserSkillDifficulty {
+  id         String @id @default(uuid())
+  userId     String
+  skill      Skill
+  difficulty Float  @default(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+}
+
+/// Reference data: the ordered IELTS roadmap. Seeded once; exitCriteria is
+/// stored as JSON matching shared-types' BandExitCriteria shape.
+model IeltsStage {
+  id            String   @id
+  order         Int      @unique
+  label         String
+  minBand       Float
+  maxBand       Float
+  description   String
+  exitCriteria  Json
+
+  exercises        Exercise[]
+  stageProgress    UserStageProgress[]
+  studySessions    StudySession[]
+  bandEvaluations  BandExitEvaluationLog[]
+  weaknessSnapshots WeaknessProfileSnapshot[]
+}
+
+enum BandStageStatus {
+  locked
+  unlocked
+  in_progress
+  completed
+}
+
+model UserStageProgress {
+  id          String          @id @default(uuid())
+  userId      String
+  stageId     String
+  status      BandStageStatus @default(locked)
+  unlockedAt  DateTime?
+  completedAt DateTime?
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stage IeltsStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stageId])
+}
+
+/// Append-only audit trail of every stage-gate check the orchestrator runs.
+model BandExitEvaluationLog {
+  id                   String   @id @default(uuid())
+  userId               String
+  stageId              String
+  evaluatedAt          DateTime @default(now())
+  passed               Boolean
+  skillAccuracy        Json
+  vocabRetention       Float
+  mockAssessmentScore  Float?
+  openGrammarWeaknesses Int
+  unmetCriteria        Json
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stage IeltsStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([userId, stageId, evaluatedAt])
+}
+
+/// Cached output of packages/orchestrator's buildWeaknessProfile, so the
+/// dashboard can render instantly without recomputing from raw history.
+model WeaknessProfileSnapshot {
+  id                 String   @id @default(uuid())
+  userId             String
+  stageId            String
+  generatedAt        DateTime @default(now())
+  skillMastery       Json
+  skillAccuracyTrend Json
+  grammarWeaknesses  Json
+  vocabWeaknesses    Json
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stage IeltsStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([userId, stageId, generatedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Vocabulary & SRS (FSRS)
+// ---------------------------------------------------------------------------
+
+model VocabItem {
+  id           String   @id @default(uuid())
+  headword     String
+  ipa          String?
+  partOfSpeech String?
+  definitions  Json
+  translations Json
+  examples     Json
+  cefrLevel    String?
+  audioUrl     String?
+  stageIds     Json
+
+  srsCards SrsCard[]
+
+  @@index([headword])
+}
+
+enum SrsCardState {
+  new
+  learning
+  review
+  relearning
+}
+
+model SrsCard {
+  id            String       @id @default(uuid())
+  userId        String
+  vocabId       String
+  due           DateTime
+  stability     Float        @default(0)
+  difficulty    Float        @default(0)
+  elapsedDays   Float        @default(0)
+  scheduledDays Float        @default(0)
+  reps          Int          @default(0)
+  lapses        Int          @default(0)
+  state         SrsCardState @default(new)
+  lastReview    DateTime?
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabItem VocabItem   @relation(fields: [vocabId], references: [id], onDelete: Cascade)
+  reviewLogs SrsReviewLog[]
+
+  @@unique([userId, vocabId])
+  @@index([userId, due])
+}
+
+enum SrsRating {
+  again
+  hard
+  good
+  easy
+}
+
+model SrsReviewLog {
+  id                String    @id @default(uuid())
+  cardId            String
+  sessionId         String?
+  reviewedAt        DateTime  @default(now())
+  rating            SrsRating
+  elapsedDays       Float
+  scheduledDays     Float
+  stabilityBefore   Float
+  stabilityAfter    Float
+  difficultyBefore  Float
+  difficultyAfter   Float
+
+  card    SrsCard      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  session StudySession? @relation(fields: [sessionId], references: [id])
+
+  @@index([cardId, reviewedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Exercises & attempts (Listening / Speaking / Reading / Writing)
+// ---------------------------------------------------------------------------
+
+enum Skill {
+  listening
+  speaking
+  reading
+  writing
+}
+
+enum ExerciseType {
+  listening_mcq
+  listening_dictation
+  listening_note_completion
+  speaking_shadowing
+  speaking_cue_card
+  speaking_qa
+  reading_mcq
+  reading_true_false_not_given
+  reading_matching_headings
+  writing_task1_report
+  writing_task2_essay
+  grammar_cloze
+  vocab_flashcard
+}
+
+model Exercise {
+  id         String       @id @default(uuid())
+  type       ExerciseType
+  skill      Skill
+  stageId    String
+  difficulty Float
+  prompt     String
+  content    Json
+  grammarTopics Json
+  vocabIds   Json
+  answerKey  Json
+
+  stage    IeltsStage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  attempts ExerciseAttempt[]
+
+  @@index([stageId, skill, difficulty])
+}
+
+model ExerciseAttempt {
+  id           String   @id @default(uuid())
+  userId       String
+  exerciseId   String
+  sessionId    String?
+  skill        Skill
+  score        Float
+  accuracy     Float
+  timeSpentSec Int
+  mistakes     Json
+  submittedAt  DateTime @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  session  StudySession? @relation(fields: [sessionId], references: [id])
+
+  @@index([userId, skill, submittedAt])
+}
+
+model StudySession {
+  id        String    @id @default(uuid())
+  userId    String
+  stageId   String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stage             IeltsStage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  exerciseAttempts  ExerciseAttempt[]
+  srsReviewLogs     SrsReviewLog[]
+
+  @@index([userId, startedAt])
+}
