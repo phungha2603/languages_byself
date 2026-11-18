@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import type { IeltsBandStage } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { useApp } from '@/src/state/AppContext';
 import { useGoogleSignIn } from '@/src/auth/useGoogleSignIn';
+import { notify } from '@/src/utils/notify';
 
 export default function SettingsScreen() {
   const { api, apiBaseUrl, setApiBaseUrl, userId, login, logout, stageId } = useApp();
@@ -15,6 +16,7 @@ export default function SettingsScreen() {
   const [stages, setStages] = useState<IeltsBandStage[]>([]);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const google = useGoogleSignIn();
 
@@ -32,12 +34,15 @@ export default function SettingsScreen() {
     if (!google.idToken) return;
     (async () => {
       setBusy(true);
+      setErrorMessage(null);
       try {
         const auth = await api.loginWithGoogle(google.idToken!, selectedStageId ?? undefined);
         await login(auth);
-        Alert.alert('Signed in', `Welcome, ${auth.user.displayName}!`);
+        notify('Signed in', `Welcome, ${auth.user.displayName}!`);
       } catch (err) {
-        Alert.alert('Google sign-in failed', err instanceof Error ? err.message : 'Unknown error');
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        setErrorMessage(message);
+        notify('Google sign-in failed', message);
       } finally {
         setBusy(false);
       }
@@ -47,21 +52,24 @@ export default function SettingsScreen() {
 
   async function handleSaveUrl() {
     await setApiBaseUrl(urlInput.trim());
-    Alert.alert('Saved', 'API base URL updated.');
+    notify('Saved', 'API base URL updated.');
   }
 
   async function handleCreateProfile() {
     if (!email || !displayName) {
-      Alert.alert('Missing info', 'Email and display name are required.');
+      notify('Missing info', 'Email and display name are required.');
       return;
     }
     setBusy(true);
+    setErrorMessage(null);
     try {
       const auth = await api.createUser(email.trim(), displayName.trim(), Number(targetBand) || undefined, selectedStageId ?? undefined);
       await login(auth);
-      Alert.alert('Profile created', `Welcome, ${auth.user.displayName}!`);
+      notify('Profile created', `Welcome, ${auth.user.displayName}!`);
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Could not create profile');
+      const message = err instanceof Error ? err.message : 'Could not create profile';
+      setErrorMessage(message);
+      notify('Error', message);
     } finally {
       setBusy(false);
     }
@@ -69,6 +77,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      {errorMessage && <Text style={styles.errorBanner}>{errorMessage}</Text>}
       <Text style={styles.title}>Backend connection</Text>
       <Text style={styles.label}>API base URL</Text>
       <TextInput
@@ -158,4 +167,5 @@ const styles = StyleSheet.create({
   stageOptionSelected: { borderColor: '#2e7d32', backgroundColor: '#2e7d3215' },
   stageOptionText: { opacity: 0.8 },
   stageOptionTextSelected: { opacity: 1, fontWeight: '600' },
+  errorBanner: { backgroundColor: '#c6282820', color: '#c62828', padding: 10, borderRadius: 8 },
 });
