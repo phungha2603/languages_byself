@@ -1,25 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useAudioPlayer, useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
+import { Ionicons } from '@expo/vector-icons';
 import type { Exercise, GradingResult, Skill } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
+import { Badge, Button, Card } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
+import { fontFamily, spacing, useTheme } from '@/src/theme';
+import { skillMeta } from '@/src/theme/skillMeta';
 
 const SELF_RATING_OPTIONS = [
-  { label: 'Got it wrong', accuracy: 20 },
-  { label: 'Partly right', accuracy: 60 },
-  { label: 'Nailed it', accuracy: 95 },
-] as const;
+  { label: 'Got it wrong', accuracy: 20, icon: 'close-circle' as const },
+  { label: 'Partly right', accuracy: 60, icon: 'remove-circle' as const },
+  { label: 'Nailed it', accuracy: 95, icon: 'checkmark-circle' as const },
+];
 
 const AI_GRADED_WRITING_TYPES = new Set(['writing_task1_report', 'writing_task2_essay']);
 const AI_GRADED_SPEAKING_TYPES = new Set(['speaking_cue_card', 'speaking_qa']);
 
+function bandColor(band: number, colors: { danger: string; warning: string; success: string }) {
+  if (band < 5) return colors.danger;
+  if (band < 6.5) return colors.warning;
+  return colors.success;
+}
+
 export default function PracticeSessionScreen() {
   const { skill } = useLocalSearchParams<{ skill: Skill }>();
   const { api, userId, stageId } = useApp();
+  const { colors } = useTheme();
   const router = useRouter();
+  const meta = skill ? skillMeta[skill] : undefined;
 
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +50,7 @@ export default function PracticeSessionScreen() {
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [hasRecording, setHasRecording] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const recordingPlayer = useAudioPlayer(hasRecording ? recorder.uri : null);
 
   const loadExercise = useCallback(async () => {
@@ -86,10 +99,12 @@ export default function PracticeSessionScreen() {
     }
     await recorder.prepareToRecordAsync();
     recorder.record();
+    setIsRecording(true);
   }
 
   async function handleStopRecording() {
     await recorder.stop();
+    setIsRecording(false);
     setHasRecording(true);
   }
 
@@ -141,9 +156,11 @@ export default function PracticeSessionScreen() {
     }
   }
 
+  const screenStyle = { backgroundColor: colors.background };
+
   if (!userId) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, screenStyle]}>
         <Text>Create a profile in Settings first.</Text>
       </View>
     );
@@ -151,157 +168,213 @@ export default function PracticeSessionScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, screenStyle]}>
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
   if (!exercise) {
     return (
-      <View style={styles.center}>
-        <Text>No exercises available yet for {skill} at this stage.</Text>
+      <View style={[styles.center, screenStyle]}>
+        <Ionicons name="file-tray-outline" size={40} color={colors.textSecondary} />
+        <Text style={{ color: colors.textSecondary }}>No exercises available yet for {skill} at this stage.</Text>
       </View>
     );
   }
 
   if (submitted) {
+    const band = gradingResult?.overallBand ?? null;
     return (
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{gradingResult ? `Estimated band: ${gradingResult.overallBand}` : 'Attempt recorded'}</Text>
+      <ScrollView style={screenStyle} contentContainerStyle={styles.content}>
+        <View style={[styles.resultHero, { backgroundColor: band !== null ? `${bandColor(band, colors)}1A` : colors.successSoft }]}>
+          <Ionicons
+            name={band !== null ? 'ribbon' : 'checkmark-done-circle'}
+            size={40}
+            color={band !== null ? bandColor(band, colors) : colors.success}
+          />
+          <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>
+            {band !== null ? `Band ${band}` : 'Attempt recorded'}
+          </Text>
+        </View>
+
         {gradingResult && (
-          <View style={styles.card}>
+          <Card style={{ gap: spacing.md }}>
             {gradingResult.criteria.map((c) => (
-              <View key={c.criterion} style={styles.criterionRow}>
-                <Text style={styles.criterionName}>
-                  {c.criterion}: Band {c.band}
-                </Text>
-                <Text style={styles.criterionRationale}>{c.rationale}</Text>
+              <View key={c.criterion} style={styles.criterionBlock}>
+                <View style={styles.criterionHeader}>
+                  <Text style={[styles.criterionName, { color: colors.textPrimary }]}>{c.criterion}</Text>
+                  <Badge label={`Band ${c.band}`} color={bandColor(c.band, colors)} />
+                </View>
+                <View style={[styles.miniTrack, { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.miniFill, { width: `${(c.band / 9) * 100}%`, backgroundColor: bandColor(c.band, colors) }]} />
+                </View>
+                <Text style={[styles.criterionRationale, { color: colors.textSecondary }]}>{c.rationale}</Text>
               </View>
             ))}
-            <Text style={styles.sectionTitle}>Feedback</Text>
-            <Text>{gradingResult.feedback}</Text>
+
+            <View style={styles.divider} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Feedback</Text>
+            <Text style={{ color: colors.textSecondary }}>{gradingResult.feedback}</Text>
+
             {gradingResult.mistakes.length > 0 && (
               <>
-                <Text style={styles.sectionTitle}>Issues found</Text>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Issues found</Text>
                 {gradingResult.mistakes.map((m, i) => (
-                  <Text key={i}>
-                    • [{m.category}] {m.detail}
-                  </Text>
+                  <View key={i} style={styles.bulletRow}>
+                    <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+                    <Text style={{ color: colors.textSecondary, flex: 1 }}>
+                      [{m.category}] {m.detail}
+                    </Text>
+                  </View>
                 ))}
               </>
             )}
-          </View>
+          </Card>
         )}
-        <Pressable style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Back to Practice</Text>
-        </Pressable>
+        <Button label="Back to Practice" icon="arrow-back" onPress={() => router.back()} variant="soft" fullWidth />
       </ScrollView>
     );
   }
 
   const isAiGradedWriting = AI_GRADED_WRITING_TYPES.has(exercise.type);
   const isAiGradedSpeaking = AI_GRADED_SPEAKING_TYPES.has(exercise.type);
+  const accent = meta?.color ?? colors.primary;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      {error && <Text style={styles.error}>{error}</Text>}
-      <Text style={styles.difficulty}>Difficulty {exercise.difficulty.toFixed(1)} / 10</Text>
-      <Text style={styles.prompt}>{exercise.prompt}</Text>
+    <ScrollView style={screenStyle} contentContainerStyle={styles.content}>
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: colors.dangerSoft }]}>
+          <Ionicons name="warning" size={16} color={colors.danger} />
+          <Text style={{ color: colors.danger, flex: 1 }}>{error}</Text>
+        </View>
+      )}
+
+      <Card accentColor={accent} style={{ gap: spacing.sm }}>
+        <View style={styles.promptHeader}>
+          {meta && <Ionicons name={meta.icon} size={16} color={accent} />}
+          <Badge label={`Difficulty ${exercise.difficulty.toFixed(1)}/10`} color={accent} />
+        </View>
+        <Text style={[styles.prompt, { color: colors.textPrimary }]}>{exercise.prompt}</Text>
+      </Card>
 
       {skill === 'listening' && (
-        <Pressable style={styles.button} onPress={handlePlayPrompt} disabled={ttsLoading}>
-          <Text style={styles.buttonText}>{ttsLoading ? 'Synthesizing…' : '🔊 Play prompt'}</Text>
-        </Pressable>
+        <Button
+          label={ttsLoading ? 'Synthesizing…' : 'Play prompt'}
+          icon="volume-high"
+          onPress={handlePlayPrompt}
+          loading={ttsLoading}
+          color={accent}
+          fullWidth
+        />
       )}
 
       {skill === 'speaking' && (
         <View style={styles.row}>
-          <Pressable style={styles.button} onPress={handleStartRecording}>
-            <Text style={styles.buttonText}>🎙️ Record</Text>
-          </Pressable>
-          <Pressable style={styles.button} onPress={handleStopRecording}>
-            <Text style={styles.buttonText}>⏹ Stop</Text>
-          </Pressable>
-          {hasRecording && (
-            <Pressable style={styles.button} onPress={() => recordingPlayer.play()}>
-              <Text style={styles.buttonText}>▶️ Playback</Text>
-            </Pressable>
+          {!isRecording ? (
+            <Button label="Record" icon="mic" onPress={handleStartRecording} color={accent} />
+          ) : (
+            <Button label="Stop" icon="stop" onPress={handleStopRecording} variant="danger" />
           )}
+          {hasRecording && <Button label="Playback" icon="play" variant="soft" color={accent} onPress={() => recordingPlayer.play()} />}
         </View>
       )}
 
       {isAiGradedWriting ? (
-        <>
-          <Text style={styles.sectionTitle}>Write your response</Text>
+        <View style={{ gap: spacing.sm }}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Write your response</Text>
           <TextInput
-            style={styles.essayInput}
+            style={[styles.essayInput, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surface }]}
             value={essay}
             onChangeText={setEssay}
             multiline
             placeholder="Type your essay here…"
+            placeholderTextColor={colors.textSecondary}
             textAlignVertical="top"
           />
-          <Pressable style={styles.button} disabled={submitting || !essay.trim()} onPress={handleGradeWriting}>
-            <Text style={styles.buttonText}>{submitting ? 'Grading…' : 'Submit for AI grading'}</Text>
-          </Pressable>
-        </>
+          <Button
+            label={submitting ? 'Grading…' : 'Submit for AI grading'}
+            icon="sparkles"
+            loading={submitting}
+            disabled={!essay.trim()}
+            onPress={handleGradeWriting}
+            color={accent}
+            fullWidth
+          />
+        </View>
       ) : isAiGradedSpeaking ? (
-        <>
-          <Text style={styles.sectionTitle}>Transcript of what you said</Text>
-          <Text style={styles.hint}>
-            Voice-to-text upload isn't wired up yet — type or paste what you said (e.g. from the recording above) to get rubric
+        <View style={{ gap: spacing.sm }}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Transcript of what you said</Text>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>
+            Voice-to-text upload isn&apos;t wired up yet — type or paste what you said (e.g. from the recording above) to get rubric
             feedback now.
           </Text>
           <TextInput
-            style={styles.essayInput}
+            style={[styles.essayInput, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surface }]}
             value={transcript}
             onChangeText={setTranscript}
             multiline
             placeholder="Type your spoken response here…"
+            placeholderTextColor={colors.textSecondary}
             textAlignVertical="top"
           />
-          <Pressable style={styles.button} disabled={submitting || !transcript.trim()} onPress={handleGradeSpeaking}>
-            <Text style={styles.buttonText}>{submitting ? 'Grading…' : 'Submit for AI grading'}</Text>
-          </Pressable>
-        </>
+          <Button
+            label={submitting ? 'Grading…' : 'Submit for AI grading'}
+            icon="sparkles"
+            loading={submitting}
+            disabled={!transcript.trim()}
+            onPress={handleGradeSpeaking}
+            color={accent}
+            fullWidth
+          />
+        </View>
       ) : (
-        <>
-          <Text style={styles.sectionTitle}>How did you do?</Text>
+        <View style={{ gap: spacing.sm }}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>How did you do?</Text>
           <View style={styles.row}>
             {SELF_RATING_OPTIONS.map((opt) => (
-              <Pressable key={opt.label} style={styles.button} disabled={submitting} onPress={() => handleSelfRate(opt.accuracy)}>
-                <Text style={styles.buttonText}>{opt.label}</Text>
-              </Pressable>
+              <Button
+                key={opt.label}
+                label={opt.label}
+                icon={opt.icon}
+                variant="soft"
+                color={opt.accuracy < 40 ? colors.danger : opt.accuracy < 80 ? colors.warning : colors.success}
+                disabled={submitting}
+                onPress={() => handleSelfRate(opt.accuracy)}
+              />
             ))}
           </View>
-        </>
+        </View>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  title: { fontSize: 18, fontWeight: '700' },
-  difficulty: { opacity: 0.6 },
-  prompt: { fontSize: 18 },
-  sectionTitle: { fontSize: 16, fontWeight: '600' },
-  hint: { opacity: 0.6, fontSize: 12 },
-  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  button: { backgroundColor: '#2e7d32', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  buttonText: { color: 'white', fontWeight: '600' },
-  error: { color: '#c62828' },
+  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  sectionTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  hint: { fontFamily: fontFamily.regular, fontSize: 12 },
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  promptHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  prompt: { fontFamily: fontFamily.medium, fontSize: 17, lineHeight: 24 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12 },
   essayInput: {
     minHeight: 160,
     borderWidth: 1,
-    borderColor: '#00000030',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 14,
+    padding: spacing.md,
+    fontFamily: fontFamily.regular,
+    fontSize: 15,
   },
-  card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#00000015', gap: 8 },
-  criterionRow: { marginBottom: 4 },
-  criterionName: { fontWeight: '600' },
-  criterionRationale: { opacity: 0.7 },
+  resultHero: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, borderRadius: 20 },
+  resultTitle: { fontFamily: fontFamily.display, fontSize: 24 },
+  criterionBlock: { gap: 6 },
+  criterionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  criterionName: { fontFamily: fontFamily.semibold, fontSize: 14 },
+  criterionRationale: { fontFamily: fontFamily.regular, fontSize: 12.5, lineHeight: 17 },
+  miniTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  miniFill: { height: '100%', borderRadius: 3 },
+  divider: { height: 1, backgroundColor: '#00000012', marginVertical: 4 },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: 4 },
 });

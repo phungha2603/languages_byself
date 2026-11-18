@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { IeltsBandStage } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
+import { Button, Card, ScreenHeader } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
 import { useGoogleSignIn } from '@/src/auth/useGoogleSignIn';
 import { notify } from '@/src/utils/notify';
+import { fontFamily, spacing, useTheme } from '@/src/theme';
 
 export default function SettingsScreen() {
   const { api, apiBaseUrl, setApiBaseUrl, userId, login, logout, stageId } = useApp();
+  const { colors } = useTheme();
   const [urlInput, setUrlInput] = useState(apiBaseUrl);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -75,97 +79,165 @@ export default function SettingsScreen() {
     }
   }
 
+  const inputStyle = [styles.input, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surfaceAlt }];
+
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      {errorMessage && <Text style={styles.errorBanner}>{errorMessage}</Text>}
-      <Text style={styles.title}>Backend connection</Text>
-      <Text style={styles.label}>API base URL</Text>
-      <TextInput
-        style={styles.input}
-        value={urlInput}
-        onChangeText={setUrlInput}
-        placeholder="http://localhost:3000/api"
-        autoCapitalize="none"
-      />
-      <Pressable style={styles.button} onPress={handleSaveUrl}>
-        <Text style={styles.buttonText}>Save URL</Text>
-      </Pressable>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+      <ScreenHeader title="Settings" subtitle="Account, server connection & study plan" />
 
-      <View style={styles.divider} />
+      <View style={{ paddingHorizontal: spacing.lg, gap: spacing.lg, backgroundColor: 'transparent' }}>
+        {errorMessage && (
+          <View style={[styles.errorBanner, { backgroundColor: colors.dangerSoft }]}>
+            <Ionicons name="warning" size={16} color={colors.danger} />
+            <Text style={{ color: colors.danger, flex: 1 }}>{errorMessage}</Text>
+          </View>
+        )}
 
-      {userId ? (
-        <>
-          <Text style={styles.title}>Your profile</Text>
-          <Text>User ID: {userId}</Text>
-          <Text>Current stage: {stageId}</Text>
-          <Pressable style={[styles.button, styles.dangerButton]} onPress={logout}>
-            <Text style={styles.buttonText}>Sign out</Text>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <Text style={styles.label}>Starting IELTS stage</Text>
-          <Text style={styles.hint}>
-            Chọn mốc gần nhất với trình độ hiện tại của bạn — các mốc trước đó sẽ được đánh dấu đã hoàn thành.
-          </Text>
-          {stages.map((stage) => (
-            <Pressable
-              key={stage.id}
-              style={[styles.stageOption, selectedStageId === stage.id && styles.stageOptionSelected]}
-              onPress={() => setSelectedStageId(stage.id)}>
-              <Text style={[styles.stageOptionText, selectedStageId === stage.id && styles.stageOptionTextSelected]}>
-                {selectedStageId === stage.id ? '◉ ' : '○ '}
-                {stage.label}
+        {userId ? (
+          <Card style={{ gap: spacing.md }}>
+            <View style={styles.profileRow}>
+              <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="person" size={24} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+                <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Your profile</Text>
+                <Text style={[styles.mutedMono, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {userId}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.stagePill, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="flag" size={14} color={colors.primary} />
+              <Text style={{ color: colors.textPrimary, fontFamily: fontFamily.medium, fontSize: 13 }}>Current stage: {stageId}</Text>
+            </View>
+            <Button label="Sign out" icon="log-out-outline" variant="outline" color={colors.danger} onPress={logout} fullWidth />
+          </Card>
+        ) : (
+          <>
+            <Card style={{ gap: spacing.sm }}>
+              <SectionLabel icon="flag" text="Starting IELTS stage" color={colors.primary} />
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>
+                Chọn mốc gần nhất với trình độ hiện tại của bạn — các mốc trước đó sẽ được đánh dấu đã hoàn thành.
               </Text>
-            </Pressable>
-          ))}
+              {stages.map((stage) => {
+                const selected = selectedStageId === stage.id;
+                return (
+                  <Pressable key={stage.id} onPress={() => setSelectedStageId(stage.id)}>
+                    <View
+                      style={[
+                        styles.stageOption,
+                        { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primarySoft : 'transparent' },
+                      ]}>
+                      <Ionicons
+                        name={selected ? 'radio-button-on' : 'radio-button-off'}
+                        size={18}
+                        color={selected ? colors.primary : colors.textSecondary}
+                      />
+                      <Text style={[styles.stageOptionText, { color: selected ? colors.primary : colors.textPrimary }]}>{stage.label}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </Card>
 
-          <Text style={styles.title}>Sign in with Google</Text>
-          {!google.configured && (
-            <Text style={styles.hint}>
-              Chưa cấu hình EXPO_PUBLIC_GOOGLE_*_CLIENT_ID — xem docs/ARCHITECTURE.md để thiết lập OAuth Client thật trên Google
-              Cloud Console trước khi dùng nút này.
-            </Text>
-          )}
-          <Pressable
-            style={[styles.button, styles.googleButton]}
-            disabled={busy || !google.request}
-            onPress={() => google.promptAsync()}>
-            <Text style={styles.buttonText}>{busy ? 'Signing in…' : 'Sign in with Google'}</Text>
-          </Pressable>
+            <Card style={{ gap: spacing.sm }}>
+              <SectionLabel icon="log-in" text="Sign in with Google" color="#1a73e8" />
+              {!google.configured && (
+                <Text style={[styles.hint, { color: colors.textSecondary }]}>
+                  Chưa cấu hình EXPO_PUBLIC_GOOGLE_*_CLIENT_ID — xem docs/ARCHITECTURE.md để thiết lập OAuth Client thật trên Google
+                  Cloud Console trước khi dùng nút này.
+                </Text>
+              )}
+              <Pressable
+                disabled={busy || !google.request}
+                onPress={() => google.promptAsync()}
+                style={({ pressed }) => [
+                  styles.googleButton,
+                  { borderColor: colors.border, opacity: busy || !google.request ? 0.5 : pressed ? 0.85 : 1 },
+                ]}>
+                <Ionicons name="logo-google" size={18} color="#1a73e8" />
+                <Text style={[styles.googleButtonText, { color: colors.textPrimary }]}>
+                  {busy ? 'Signing in…' : 'Sign in with Google'}
+                </Text>
+              </Pressable>
+            </Card>
 
-          <View style={styles.divider} />
+            <Card style={{ gap: spacing.sm }}>
+              <SectionLabel icon="person-add" text="Or create a profile manually" color={colors.primary} />
+              <Field label="Email">
+                <TextInput style={inputStyle} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholderTextColor={colors.textSecondary} />
+              </Field>
+              <Field label="Display name">
+                <TextInput style={inputStyle} value={displayName} onChangeText={setDisplayName} placeholderTextColor={colors.textSecondary} />
+              </Field>
+              <Field label="Target IELTS band">
+                <TextInput style={inputStyle} value={targetBand} onChangeText={setTargetBand} keyboardType="decimal-pad" placeholderTextColor={colors.textSecondary} />
+              </Field>
+              <Button label={busy ? 'Creating…' : 'Create profile'} icon="checkmark" loading={busy} onPress={handleCreateProfile} fullWidth />
+            </Card>
+          </>
+        )}
 
-          <Text style={styles.title}>Or create a profile manually</Text>
-          <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-          <Text style={styles.label}>Display name</Text>
-          <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} />
-          <Text style={styles.label}>Target IELTS band</Text>
-          <TextInput style={styles.input} value={targetBand} onChangeText={setTargetBand} keyboardType="decimal-pad" />
-          <Pressable style={styles.button} disabled={busy} onPress={handleCreateProfile}>
-            <Text style={styles.buttonText}>{busy ? 'Creating…' : 'Create profile'}</Text>
-          </Pressable>
-        </>
-      )}
+        <Card style={{ gap: spacing.sm }}>
+          <SectionLabel icon="server" text="Backend connection" color={colors.textSecondary} />
+          <Field label="API base URL">
+            <TextInput
+              style={inputStyle}
+              value={urlInput}
+              onChangeText={setUrlInput}
+              placeholder="http://localhost:3000/api"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+            />
+          </Field>
+          <Button label="Save URL" icon="save-outline" variant="soft" onPress={handleSaveUrl} fullWidth />
+        </Card>
+      </View>
     </ScrollView>
   );
 }
 
+function SectionLabel({ icon, text, color }: { icon: keyof typeof Ionicons.glyphMap; text: string; color: string }) {
+  return (
+    <View style={styles.sectionLabelRow}>
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[styles.cardTitle, { color }]}>{text}</Text>
+    </View>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 4, backgroundColor: 'transparent' }}>
+      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 8 },
-  title: { fontSize: 18, fontWeight: '700', marginTop: 8 },
-  label: { marginTop: 8, opacity: 0.7 },
-  hint: { opacity: 0.5, fontSize: 12, marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: '#00000030', borderRadius: 8, padding: 10 },
-  button: { marginTop: 12, backgroundColor: '#2e7d32', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  googleButton: { backgroundColor: '#1a73e8' },
-  dangerButton: { backgroundColor: '#c62828' },
-  buttonText: { color: 'white', fontWeight: '600' },
-  divider: { height: 1, backgroundColor: '#00000015', marginVertical: 16 },
-  stageOption: { borderWidth: 1, borderColor: '#00000020', borderRadius: 8, padding: 10, marginTop: 6 },
-  stageOptionSelected: { borderColor: '#2e7d32', backgroundColor: '#2e7d3215' },
-  stageOptionText: { opacity: 0.8 },
-  stageOptionTextSelected: { opacity: 1, fontWeight: '600' },
-  errorBanner: { backgroundColor: '#c6282820', color: '#c62828', padding: 10, borderRadius: 8 },
+  content: { paddingBottom: spacing.xxxl },
+  cardTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  hint: { fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 17 },
+  fieldLabel: { fontFamily: fontFamily.medium, fontSize: 12 },
+  input: { borderWidth: 1, borderRadius: 12, padding: 10, fontFamily: fontFamily.regular },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  mutedMono: { fontFamily: fontFamily.regular, fontSize: 11 },
+  stagePill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: 10 },
+  stageOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1.5, borderRadius: 12, padding: spacing.sm },
+  stageOptionText: { fontFamily: fontFamily.medium, fontSize: 13.5, flex: 1 },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingVertical: 12,
+  },
+  googleButtonText: { fontFamily: fontFamily.semibold, fontSize: 15 },
 });

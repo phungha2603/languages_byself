@@ -3,6 +3,8 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Lexend_600SemiBold, Lexend_700Bold } from '@expo-google-fonts/lexend';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AppProvider } from '@/src/state/AppContext';
@@ -21,7 +23,12 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Lexend_600SemiBold,
+    Lexend_700Bold,
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.

@@ -1,14 +1,19 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet } from 'react-native';
-import type { NextSessionPlan, WeaknessProfile } from '@app/shared-types';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { SKILLS, type NextSessionPlan, type WeaknessProfile } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { MasteryBar } from '@/src/components/MasteryBar';
+import { Badge, Button, Card, ProgressRing, ScreenHeader } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
+import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
+import { skillMeta } from '@/src/theme/skillMeta';
 
 export default function DashboardScreen() {
   const { ready, api, userId, stageId } = useApp();
+  const { colors } = useTheme();
   const router = useRouter();
   const [profile, setProfile] = useState<WeaknessProfile | null>(null);
   const [plan, setPlan] = useState<NextSessionPlan | null>(null);
@@ -43,70 +48,114 @@ export default function DashboardScreen() {
 
   if (!userId) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.title}>Welcome to English Coach</Text>
-        <Text style={styles.subtitle}>Create a profile in Settings to get your personalized study plan.</Text>
-        <Pressable style={styles.cta} onPress={() => router.push('/settings')}>
-          <Text style={styles.ctaText}>Go to Settings</Text>
-        </Pressable>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <LinearGradient colors={[palette.violet600, palette.violet400]} style={styles.welcomeIcon}>
+          <Ionicons name="sparkles" size={36} color="#fff" />
+        </LinearGradient>
+        <Text style={styles.welcomeTitle}>Welcome to English Coach</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Create a profile in Settings to get your personalized study plan.
+        </Text>
+        <Button label="Go to Settings" icon="arrow-forward" iconPosition="right" onPress={() => router.push('/settings')} />
       </View>
     );
   }
 
+  const overallMastery = profile
+    ? Math.round(SKILLS.reduce((sum, s) => sum + profile.skillMastery[s], 0) / SKILLS.length)
+    : 0;
+
   return (
     <ScrollView
-      style={styles.container}
+      style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
-      <Text style={styles.title}>Your weak points</Text>
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}>
+      <ScreenHeader title="Dashboard" subtitle={`Stage · ${stageId}`} />
+
+      <LinearGradient colors={[palette.violet700, palette.violet500]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+        <View style={styles.heroRow}>
+          <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <Text style={styles.heroLabel}>Overall mastery</Text>
+            <Text style={styles.heroValue}>{overallMastery}%</Text>
+          </View>
+          <ProgressRing value={overallMastery} color="#fff" trackColor="#FFFFFF33" size={64} strokeWidth={6} />
+        </View>
+      </LinearGradient>
+
       {error && <Text style={styles.error}>{error}</Text>}
-      {!profile && loading && <ActivityIndicator />}
+      {!profile && loading && <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />}
+
       {profile && (
-        <View style={styles.card}>
-          {(['listening', 'speaking', 'reading', 'writing'] as const).map((skill) => (
-            <MasteryBar key={skill} label={skill} value={profile.skillMastery[skill]} />
-          ))}
+        <View style={styles.ringGrid}>
+          {SKILLS.map((skill) => {
+            const meta = skillMeta[skill];
+            return (
+              <Card key={skill} style={styles.ringCard} padded>
+                <ProgressRing value={profile.skillMastery[skill]} color={meta.color} trackColor={`${meta.color}22`} size={56} strokeWidth={6} />
+                <Ionicons name={meta.icon} size={14} color={meta.color} style={{ marginTop: spacing.sm }} />
+                <Text style={[styles.ringLabel, { color: colors.textPrimary }]}>{meta.label}</Text>
+              </Card>
+            );
+          })}
         </View>
       )}
 
       {profile && profile.grammarWeaknesses.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recurring grammar issues</Text>
+        <Card>
+          <View style={styles.cardHeaderRow}>
+            <Ionicons name="alert-circle" size={18} color={colors.warning} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recurring grammar issues</Text>
+          </View>
           {profile.grammarWeaknesses.slice(0, 5).map((w) => (
-            <Text key={w.topic}>
-              • {w.topic} ({w.occurrences}x, mastery {w.masteryScore}%)
-            </Text>
+            <View key={w.topic} style={styles.bulletRow}>
+              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
+                {w.topic.replace(/_/g, ' ')} · seen {w.occurrences}x
+              </Text>
+              <Badge label={`${w.masteryScore}%`} color={w.masteryScore < 70 ? colors.danger : colors.success} />
+            </View>
           ))}
-        </View>
+        </Card>
       )}
 
       {plan && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recommended next session</Text>
+        <Card accentColor={colors.primary}>
+          <View style={styles.cardHeaderRow}>
+            <Ionicons name="rocket" size={18} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recommended next session</Text>
+          </View>
           {plan.rationale.map((line, i) => (
-            <Text key={i} style={styles.rationale}>
-              • {line}
-            </Text>
+            <View key={i} style={styles.bulletRow}>
+              <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.rationale, { color: colors.textSecondary }]}>{line}</Text>
+            </View>
           ))}
-          <Pressable style={styles.cta} onPress={() => router.push('/practice')}>
-            <Text style={styles.ctaText}>Start practicing</Text>
-          </Pressable>
-        </View>
+          <View style={{ marginTop: spacing.md }}>
+            <Button label="Start practicing" icon="play" onPress={() => router.push('/practice')} fullWidth />
+          </View>
+        </Card>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, gap: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 20, fontWeight: '700' },
-  subtitle: { textAlign: 'center', opacity: 0.7 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#00000015' },
-  rationale: { marginBottom: 4 },
-  error: { color: '#c62828' },
-  cta: { marginTop: 12, backgroundColor: '#2e7d32', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  ctaText: { color: 'white', fontWeight: '600' },
+  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl, gap: spacing.md },
+  welcomeIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  welcomeTitle: { fontFamily: fontFamily.display, fontSize: 22, textAlign: 'center' },
+  subtitle: { textAlign: 'center', fontFamily: fontFamily.regular, fontSize: 14, marginBottom: spacing.sm },
+  heroCard: { borderRadius: 24, padding: spacing.xl },
+  heroRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' },
+  heroLabel: { color: '#E9D5FF', fontFamily: fontFamily.medium, fontSize: 13 },
+  heroValue: { color: '#fff', fontFamily: fontFamily.display, fontSize: 34, marginTop: 2 },
+  ringGrid: { flexDirection: 'row', gap: spacing.sm },
+  ringCard: { flex: 1, alignItems: 'center', paddingVertical: spacing.lg },
+  ringLabel: { fontFamily: fontFamily.medium, fontSize: 12, marginTop: 4 },
+  sectionTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  bulletRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
+  bulletText: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1, textTransform: 'capitalize' },
+  rationale: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  error: { color: '#c62828', fontFamily: fontFamily.medium },
 });

@@ -1,11 +1,15 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Skill, WeaknessProfile } from '@app/shared-types';
 import { SKILLS } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
+import { Card, ProgressRing, ScreenHeader } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
+import { fontFamily, spacing, useTheme } from '@/src/theme';
+import { skillMeta } from '@/src/theme/skillMeta';
 
 const SKILL_DESCRIPTIONS: Record<Skill, string> = {
   listening: 'Audio comprehension, dictation, note completion.',
@@ -16,6 +20,7 @@ const SKILL_DESCRIPTIONS: Record<Skill, string> = {
 
 export default function PracticeIndexScreen() {
   const { api, userId, stageId } = useApp();
+  const { colors } = useTheme();
   const router = useRouter();
   const [profile, setProfile] = useState<WeaknessProfile | null>(null);
 
@@ -28,33 +33,42 @@ export default function PracticeIndexScreen() {
 
   if (!userId) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Text>Create a profile in Settings first.</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      {SKILLS.map((skill) => (
-        <Pressable key={skill} style={styles.card} onPress={() => router.push(`/practice/${skill}`)}>
-          <View style={styles.cardRow}>
-            <Text style={styles.skillName}>{skill}</Text>
-            {profile && <Text style={styles.mastery}>{profile.skillMastery[skill]}% mastery</Text>}
-          </View>
-          <Text style={styles.description}>{SKILL_DESCRIPTIONS[skill]}</Text>
-        </Pressable>
-      ))}
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+      <ScreenHeader title="Practice" subtitle="Pick a skill to work on" />
+      <View style={{ gap: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: 'transparent' }}>
+        {SKILLS.map((skill) => {
+          const meta = skillMeta[skill];
+          const mastery = profile?.skillMastery[skill] ?? 0;
+          return (
+            <Pressable key={skill} onPress={() => router.push(`/practice/${skill}`)}>
+              <Card accentColor={meta.color} style={styles.row}>
+                <ProgressRing value={mastery} color={meta.color} trackColor={`${meta.color}22`} size={48} strokeWidth={5} icon={meta.icon} />
+                <View style={styles.textCol}>
+                  <Text style={[styles.skillName, { color: colors.textPrimary }]}>{meta.label}</Text>
+                  <Text style={[styles.description, { color: colors.textSecondary }]}>{SKILL_DESCRIPTIONS[skill]}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </Card>
+            </Pressable>
+          );
+        })}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 12 },
+  content: { paddingBottom: spacing.xxxl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#00000015' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  skillName: { fontSize: 18, fontWeight: '700', textTransform: 'capitalize' },
-  mastery: { opacity: 0.7 },
-  description: { marginTop: 4, opacity: 0.7 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  textCol: { flex: 1, gap: 2, backgroundColor: 'transparent' },
+  skillName: { fontFamily: fontFamily.semibold, fontSize: 16 },
+  description: { fontFamily: fontFamily.regular, fontSize: 12.5 },
 });

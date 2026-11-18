@@ -1,10 +1,17 @@
 import { Stack } from 'expo-router';
+import { useTheme } from '@/src/theme';
 
 export default function PracticeLayout() {
+  const { colors } = useTheme();
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: 'Practice' }} />
-      <Stack.Screen name="[skill]" options={{ title: 'Session' }} />
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.textPrimary,
+        headerShadowVisible: false,
+      }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="[skill]" options={{ title: 'Practice session' }} />
     </Stack>
   );
 }
