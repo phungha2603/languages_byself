@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { SrsService } from "./srs.service";
 import { ReviewCardDto } from "./dto/review-card.dto";
+import { AddCardDto } from "./dto/add-card.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequireSelfGuard } from "../auth/require-self.guard";
 
@@ -12,6 +13,11 @@ export class SrsController {
   @Get("users/:userId/due")
   getDueCards(@Param("userId") userId: string, @Query("limit") limit?: string) {
     return this.srsService.getDueCards(userId, limit ? Number(limit) : undefined);
+  }
+
+  @Post("users/:userId/cards")
+  addCard(@Param("userId") userId: string, @Body() dto: AddCardDto) {
+    return this.srsService.addCard(userId, dto.vocabId);
   }
 
   @Post("users/:userId/review")

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SRS_RATINGS, type SrsRating } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
@@ -13,6 +13,8 @@ export default function SrsReviewScreen() {
   const [loading, setLoading] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newWord, setNewWord] = useState('');
+  const [addingWord, setAddingWord] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -34,6 +36,26 @@ export default function SrsReviewScreen() {
       load();
     }, [load]),
   );
+
+  async function handleAddWord() {
+    if (!userId || !newWord.trim()) return;
+    setAddingWord(true);
+    setError(null);
+    try {
+      const lookup = await api.lookupWord(newWord.trim());
+      if (!lookup.found || lookup.entries.length === 0) {
+        setError(`Could not find a dictionary entry for "${newWord.trim()}".`);
+        return;
+      }
+      await api.addSrsCard(userId, lookup.entries[0].id);
+      setNewWord('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add word');
+    } finally {
+      setAddingWord(false);
+    }
+  }
 
   async function handleRate(rating: SrsRating) {
     if (!userId || queue.length === 0) return;
@@ -63,14 +85,34 @@ export default function SrsReviewScreen() {
     );
   }
 
+  const addWordBox = (
+    <View style={styles.addWordBox}>
+      <Text style={styles.sectionTitle}>Add a word to review</Text>
+      <View style={styles.row}>
+        <TextInput
+          style={styles.addWordInput}
+          value={newWord}
+          onChangeText={setNewWord}
+          placeholder="e.g. resilient"
+          autoCapitalize="none"
+        />
+        <Pressable style={styles.button} disabled={addingWord || !newWord.trim()} onPress={handleAddWord}>
+          <Text style={styles.buttonText}>{addingWord ? 'Adding…' : 'Add'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
   if (queue.length === 0) {
     return (
       <View style={styles.center}>
+        {error && <Text style={styles.error}>{error}</Text>}
         <Text style={styles.title}>All caught up! 🎉</Text>
         <Text style={styles.subtitle}>No vocabulary due for review right now.</Text>
         <Pressable style={styles.button} onPress={load}>
           <Text style={styles.buttonText}>Refresh</Text>
         </Pressable>
+        {addWordBox}
       </View>
     );
   }
@@ -110,6 +152,8 @@ export default function SrsReviewScreen() {
           ))}
         </View>
       )}
+
+      {addWordBox}
     </View>
   );
 }
@@ -148,4 +192,7 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2e7d32', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
   buttonText: { color: 'white', fontWeight: '600', textTransform: 'capitalize' },
   error: { color: '#c62828' },
+  addWordBox: { marginTop: 24, width: '100%', gap: 8 },
+  sectionTitle: { fontSize: 14, fontWeight: '600', opacity: 0.7 },
+  addWordInput: { flex: 1, borderWidth: 1, borderColor: '#00000030', borderRadius: 8, padding: 10 },
 });

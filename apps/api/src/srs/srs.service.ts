@@ -18,6 +18,30 @@ export class SrsService {
     });
   }
 
+  /** Adds a word to the user's deck as a brand-new, immediately-due card (distinct from grading a review). */
+  async addCard(userId: string, vocabId: string) {
+    const vocab = await this.prisma.vocabItem.findUnique({ where: { id: vocabId } });
+    if (!vocab) throw new NotFoundException(`Vocab item ${vocabId} not found`);
+
+    return this.prisma.srsCard.upsert({
+      where: { userId_vocabId: { userId, vocabId } },
+      update: {},
+      create: {
+        userId,
+        vocabId,
+        due: new Date(),
+        stability: 0,
+        difficulty: 0,
+        elapsedDays: 0,
+        scheduledDays: 0,
+        reps: 0,
+        lapses: 0,
+        state: "new",
+      },
+      include: { vocabItem: true },
+    });
+  }
+
   async review(userId: string, vocabId: string, rating: SrsRating, sessionId?: string) {
     const vocab = await this.prisma.vocabItem.findUnique({ where: { id: vocabId } });
     if (!vocab) throw new NotFoundException(`Vocab item ${vocabId} not found`);

@@ -110,6 +110,10 @@ export class ApiClient {
     return this.request(`/srs/users/${userId}/due?limit=${limit}`);
   }
 
+  addSrsCard(userId: string, vocabId: string): Promise<SrsCardDto> {
+    return this.request(`/srs/users/${userId}/cards`, { method: "POST", body: JSON.stringify({ vocabId }) });
+  }
+
   reviewSrsCard(userId: string, vocabId: string, rating: SrsRating): Promise<SrsCardDto> {
     return this.request(`/srs/users/${userId}/review`, { method: "POST", body: JSON.stringify({ vocabId, rating }) });
   }
