@@ -10,7 +10,23 @@ const STORAGE_KEYS = {
   stageId: "englishcoach.stageId",
 };
 
-const DEFAULT_API_BASE_URL = "http://localhost:3000/api";
+/**
+ * In a browser, default to the API living on the same origin (`/api`) —
+ * true once deployed, since the backend serves the web build itself (see
+ * apps/api's Dockerfile + public/ static root). On `localhost` specifically
+ * we're almost certainly in local dev with Metro and the API as two
+ * separate processes on different ports, so keep pointing at :3000 there.
+ * Native builds (no `window`) fall back to the same local-dev default;
+ * Settings lets you override it either way.
+ */
+function resolveDefaultApiBaseUrl(): string {
+  if (typeof window !== "undefined" && window.location?.hostname && window.location.hostname !== "localhost") {
+    return `${window.location.origin}/api`;
+  }
+  return "http://localhost:3000/api";
+}
+
+const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl();
 
 interface AppContextValue {
   ready: boolean;

@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.git
+.turbo
+**/dist
+**/build
+**/coverage
+.env
+.env.*
+!.env.example
+apps/api/storage
+apps/api/public
+apps/mobile/.expo
+apps/mobile/web-build
+*.log
+.DS_Store

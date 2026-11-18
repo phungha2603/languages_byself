@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "ts-node prisma/seed.ts"
+    "prisma:seed": "node --env-file-if-exists=.env -r ts-node/register prisma/seed.ts"
   },
   "dependencies": {
     "@app/orchestrator": "workspace:*",
@@ -23,10 +23,10 @@
     "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^10.4.15",
     "@nestjs/platform-express": "^10.4.15",
-    "@nestjs/serve-static": "^4.0.2",
     "@prisma/client": "^5.22.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "express": "^4.21.2",
     "google-auth-library": "^9.15.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"

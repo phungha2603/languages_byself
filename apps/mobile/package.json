@@ -38,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
     "test": "echo 'no tests'",
-    "build": "echo 'build via eas build / expo export'"
+    "build": "echo 'build via eas build / expo export'",
+    "build:web": "expo export -p web"
   },
   "private": true
 }

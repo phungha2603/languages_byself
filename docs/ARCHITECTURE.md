@@ -174,3 +174,28 @@ Tất cả service đều đứng sau một interface — muốn đổi sang Goo
 - **Google Sign-In đã có đủ code (mục 7.1b) nhưng cần Client ID thật** — tạo OAuth 2.0 Client ID trên Google Cloud Console và điền vào `apps/mobile/.env` + `apps/api/.env` (`GOOGLE_CLIENT_IDS`) thì nút "Sign in with Google" mới hoạt động; chưa có Client ID thì vẫn dùng được app qua lối tạo profile thủ công (cũng được phát JWT như nhau).
 - **Build app thật cho iOS/Android**: đã export được bundle Web tĩnh (`expo export -p web`, deploy được lên bất kỳ static host nào); build `.ipa`/`.apk` cần chạy qua **EAS Build** (`eas build --platform ios|android`), ngoài phạm vi môi trường hiện tại.
 - **TTS/STT/Translation/AI Grading** cần biến môi trường `OPENAI_API_KEY` (xem `apps/api/.env.example`) mới gọi thật được.
+
+## 10. Deploy lên Railway — 1 URL dùng được cả web lẫn điện thoại, không cần terminal
+
+Repo được chuẩn bị để chạy như **một service duy nhất**: `Dockerfile` ở gốc repo build cả API lẫn bản Web của app di động, rồi NestJS tự phục vụ luôn bản Web đó (static files + fallback cho client-side routing) từ cùng một origin với API — nên chỉ cần deploy một lần, có một URL, mở URL đó trên máy tính hay điện thoại đều là app đầy đủ, không cần cấu hình IP/port gì thêm (mobile tự nhận API cùng domain, xem `resolveDefaultApiBaseUrl` trong `AppContext.tsx`).
+
+### Các bước (toàn bộ qua giao diện web, không cần terminal)
+
+1. Vào [railway.com](https://railway.com) → đăng nhập bằng GitHub → **New Project** → **Deploy from GitHub repo** → chọn repo `languages_byself`, branch `claude/kind-carson-4lyqn0` (hoặc branch bạn đang dùng).
+2. Railway sẽ tự phát hiện `Dockerfile` ở gốc repo và build theo đó — không cần chỉnh gì ở bước này.
+3. Trong project vừa tạo, bấm **+ New** → **Database** → **Add PostgreSQL**. Railway tự tạo biến `DATABASE_URL` cho service Postgres này.
+4. Quay lại service chạy code (API), vào tab **Variables**, thêm các biến:
+   - `DATABASE_URL` → bấm "Add Reference" và chọn biến `DATABASE_URL` của service Postgres vừa tạo (để 2 service tự nối với nhau, không gõ tay connection string).
+   - `JWT_SECRET` → dán một chuỗi ngẫu nhiên dài (có thể copy thẳng giá trị mẫu trong `apps/api/.env.example`, hoặc bấm "Generate" nếu Railway có sẵn nút đó).
+   - `OPENAI_API_KEY` (tuỳ chọn) → chỉ cần nếu muốn TTS/STT/Dịch/AI Grading hoạt động thật.
+   - `GOOGLE_CLIENT_IDS` (tuỳ chọn) → chỉ cần nếu muốn nút "Sign in with Google" hoạt động thật (xem mục 7.1b).
+5. Vào tab **Settings** của service, mục **Networking** → bấm **Generate Domain** để có một URL công khai dạng `https://ten-du-an.up.railway.app`.
+6. Chờ build xong (vài phút cho lần đầu) → mở URL đó. **Đó chính là cả app**: trên máy tính mở bằng trình duyệt bất kỳ; trên điện thoại mở cùng URL đó bằng Safari/Chrome, có thể bấm "Thêm vào màn hình chính" để dùng như app mà không cần lên App Store/CH Play.
+
+Mỗi lần bạn (hoặc Claude) push code mới lên nhánh đã nối, Railway tự build & deploy lại — không cần làm lại các bước trên.
+
+### Vì sao kiến trúc này hoạt động (đã kiểm chứng thật trong lúc phát triển)
+
+`Dockerfile` build theo đúng trình tự: cài dependencies toàn repo → build `packages/*` + `apps/api` (qua turborepo, tự xử lý đúng thứ tự phụ thuộc) → build bản Web của `apps/mobile` (`expo export -p web`) → copy bản Web đó vào `apps/api/public`. Khi container khởi động, `docker-entrypoint.sh` chạy `prisma migrate deploy` rồi seed dữ liệu mẫu (an toàn chạy lại nhiều lần) trước khi start server — nên **database luôn tự migrate + có dữ liệu mẫu mà không cần bạn chạy lệnh gì**.
+
+Trong `apps/api/src/main.ts`, static file (JS/CSS/ảnh của bản Web) được đăng ký thẳng trên Express *trước khi* NestJS gắn các route — nên luôn được phục vụ đúng; `SpaFallbackController` (loại trừ khỏi prefix `/api`, import sau cùng trong `AppModule`) phục vụ `index.html` cho mọi đường dẫn còn lại (vd. tải thẳng `/srs`) để điều hướng phía client của app hoạt động đúng cả khi refresh trang — nhưng vẫn trả JSON 404 sạch cho các request `/api/*` không tồn tại. Thứ tự này rất dễ sai (ban đầu code catch-all đã vô tình "nuốt" luôn API thật hoặc static file thật) nên nếu bạn chỉnh sửa phần này, hãy kiểm tra lại cả 3 trường hợp: file tĩnh thật, API thật, và route phía client không có file thật tương ứng.

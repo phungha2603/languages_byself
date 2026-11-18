@@ -20,6 +20,9 @@ apps/api/prisma/dev.db
 # Generated audio clips
 apps/api/storage/
 
+# Mobile web build copied in by Dockerfile at deploy build time
+apps/api/public/
+
 # IDE
 .vscode/
 .idea/

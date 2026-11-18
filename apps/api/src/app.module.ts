@@ -1,7 +1,5 @@
-import { join } from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { ServeStaticModule } from "@nestjs/serve-static";
 import { PrismaModule } from "./prisma/prisma.module";
 import { UsersModule } from "./users/users.module";
 import { IeltsModule } from "./ielts/ielts.module";
@@ -15,11 +13,16 @@ import { TtsModule } from "./tools/tts/tts.module";
 import { SttModule } from "./tools/stt/stt.module";
 import { GradingModule } from "./grading/grading.module";
 import { AuthModule } from "./auth/auth.module";
+import { SpaFallbackModule } from "./spa-fallback/spa-fallback.module";
+
+// Static file serving (audio clips, the mobile web build) is wired
+// directly in main.ts with raw Express, not @nestjs/serve-static — see
+// the comment there for why its lifecycle-hook-based registration doesn't
+// reliably order against SpaFallbackModule's catch-all route below.
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ServeStaticModule.forRoot({ rootPath: join(process.cwd(), "storage"), serveRoot: "/" }),
     PrismaModule,
     UsersModule,
     IeltsModule,
@@ -33,6 +36,9 @@ import { AuthModule } from "./auth/auth.module";
     SttModule,
     GradingModule,
     AuthModule,
+    // Must stay last: its catch-all route must be registered after every
+    // other controller's routes so they're all tried first.
+    SpaFallbackModule,
   ],
 })
 export class AppModule {}

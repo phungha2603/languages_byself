@@ -4,6 +4,10 @@ AI Agent tự học tiếng Anh cá nhân hoá — đủ 4 kỹ năng (Nghe/Nói
 
 Kiến trúc chi tiết: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Dùng ngay, không cần terminal
+
+Cách đơn giản nhất để dùng app (cả trên máy tính lẫn điện thoại) là **deploy 1 lần lên Railway**, sau đó chỉ cần mở 1 đường link — xem hướng dẫn từng bước ở [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md#10-deploy-lên-railway--1-url-dùng-được-cả-web-lẫn-điện-thoại-không-cần-terminal). Phần bên dưới là chạy local để phát triển/debug.
+
 ## Cấu trúc
 
 ```
