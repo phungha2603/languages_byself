@@ -31,12 +31,17 @@ export const fontFamily = {
   displaySemibold: 'Lexend_600SemiBold',
 } as const;
 
-export function cardShadow(color: string) {
+/**
+ * A plain black shadow is invisible against a dark background, so dark mode needs a much
+ * stronger, slightly glowing shadow to read as "elevated" at all — tune opacity per mode
+ * rather than using one flat value everywhere.
+ */
+export function cardShadow(color: string, isDark = false) {
   return {
     shadowColor: color,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: isDark ? 10 : 6 },
+    shadowOpacity: isDark ? 0.45 : 0.08,
+    shadowRadius: isDark ? 22 : 16,
     elevation: 3,
   };
 }

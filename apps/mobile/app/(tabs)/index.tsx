@@ -129,7 +129,7 @@ export default function DashboardScreen() {
               <Text style={[styles.rationale, { color: colors.textSecondary }]}>{line}</Text>
             </View>
           ))}
-          <View style={{ marginTop: spacing.md }}>
+          <View style={{ marginTop: spacing.md, backgroundColor: 'transparent' }}>
             <Button label="Start practicing" icon="play" onPress={() => router.push('/practice')} fullWidth />
           </View>
         </Card>
@@ -148,12 +148,25 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' },
   heroLabel: { color: '#E9D5FF', fontFamily: fontFamily.medium, fontSize: 13 },
   heroValue: { color: '#fff', fontFamily: fontFamily.display, fontSize: 34, marginTop: 2 },
-  ringGrid: { flexDirection: 'row', gap: spacing.sm },
+  ringGrid: { flexDirection: 'row', gap: spacing.sm, backgroundColor: 'transparent' },
   ringCard: { flex: 1, alignItems: 'center', paddingVertical: spacing.lg },
   ringLabel: { fontFamily: fontFamily.medium, fontSize: 12, marginTop: 4 },
   sectionTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  bulletRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: 'transparent',
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: 'transparent',
+  },
   bulletText: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1, textTransform: 'capitalize' },
   rationale: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },

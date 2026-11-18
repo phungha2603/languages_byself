@@ -213,7 +213,7 @@ export default function PracticeSessionScreen() {
               </View>
             ))}
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Feedback</Text>
             <Text style={{ color: colors.textSecondary }}>{gradingResult.feedback}</Text>
 
@@ -251,7 +251,7 @@ export default function PracticeSessionScreen() {
       )}
 
       <Card accentColor={accent} style={{ gap: spacing.sm }}>
-        <View style={styles.promptHeader}>
+        <View style={[styles.promptHeader, { backgroundColor: 'transparent' }]}>
           {meta && <Ionicons name={meta.icon} size={16} color={accent} />}
           <Badge label={`Difficulty ${exercise.difficulty.toFixed(1)}/10`} color={accent} />
         </View>
@@ -369,12 +369,17 @@ const styles = StyleSheet.create({
   },
   resultHero: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, borderRadius: 20 },
   resultTitle: { fontFamily: fontFamily.display, fontSize: 24 },
-  criterionBlock: { gap: 6 },
-  criterionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  criterionBlock: { gap: 6, backgroundColor: 'transparent' },
+  criterionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
   criterionName: { fontFamily: fontFamily.semibold, fontSize: 14 },
   criterionRationale: { fontFamily: fontFamily.regular, fontSize: 12.5, lineHeight: 17 },
   miniTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   miniFill: { height: '100%', borderRadius: 3 },
-  divider: { height: 1, backgroundColor: '#00000012', marginVertical: 4 },
-  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: 4 },
+  divider: { height: 1, marginVertical: 4 },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: 4, backgroundColor: 'transparent' },
 });

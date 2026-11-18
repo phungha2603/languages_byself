@@ -9,12 +9,12 @@ interface CardProps extends ViewProps {
 
 /** The base surface used for every grouped block of content in the app. */
 export function Card({ children, style, accentColor, padded = true, ...rest }: PropsWithChildren<CardProps>) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   return (
     <View
       style={[
         styles.card,
-        cardShadow(colors.shadow),
+        cardShadow(isDark && accentColor ? accentColor : colors.shadow, isDark),
         { backgroundColor: colors.surface, borderColor: colors.border },
         accentColor ? { borderLeftWidth: 4, borderLeftColor: accentColor } : null,
         padded && styles.padded,
