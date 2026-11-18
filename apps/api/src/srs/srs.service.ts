@@ -18,6 +18,14 @@ export class SrsService {
     });
   }
 
+  /** Every card the user has ever added, regardless of due date — just enough to know which words are already tracked. */
+  async listAllCards(userId: string) {
+    return this.prisma.srsCard.findMany({
+      where: { userId },
+      select: { vocabId: true },
+    });
+  }
+
   /** Adds a word to the user's deck as a brand-new, immediately-due card (distinct from grading a review). */
   async addCard(userId: string, vocabId: string) {
     const vocab = await this.prisma.vocabItem.findUnique({ where: { id: vocabId } });

@@ -17,6 +17,7 @@ import type {
   TranslationResult,
   TtsResult,
   User,
+  VocabItem,
   WeaknessProfile,
   WritingTaskType,
 } from "@app/shared-types";
@@ -114,6 +115,10 @@ export class ApiClient {
     return this.request(`/srs/users/${userId}/cards`, { method: "POST", body: JSON.stringify({ vocabId }) });
   }
 
+  listMyCardVocabIds(userId: string): Promise<{ vocabId: string }[]> {
+    return this.request(`/srs/users/${userId}/cards`);
+  }
+
   reviewSrsCard(userId: string, vocabId: string, rating: SrsRating): Promise<SrsCardDto> {
     return this.request(`/srs/users/${userId}/review`, { method: "POST", body: JSON.stringify({ vocabId, rating }) });
   }
@@ -162,6 +167,10 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ transcript, part }),
     });
+  }
+
+  listVocabByStage(stageId: string): Promise<VocabItem[]> {
+    return this.request(`/vocab?stageId=${encodeURIComponent(stageId)}`);
   }
 
   lookupWord(word: string): Promise<DictionaryLookupResult> {

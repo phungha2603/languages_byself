@@ -4,6 +4,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { UsersModule } from "./users/users.module";
 import { IeltsModule } from "./ielts/ielts.module";
 import { SrsModule } from "./srs/srs.module";
+import { VocabModule } from "./vocab/vocab.module";
 import { ExercisesModule } from "./exercises/exercises.module";
 import { OrchestratorModule } from "./orchestrator/orchestrator.module";
 import { DictionaryModule } from "./tools/dictionary/dictionary.module";
@@ -27,6 +28,7 @@ import { SpaFallbackModule } from "./spa-fallback/spa-fallback.module";
     UsersModule,
     IeltsModule,
     SrsModule,
+    VocabModule,
     ExercisesModule,
     OrchestratorModule,
     DictionaryModule,

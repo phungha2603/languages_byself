@@ -29,6 +29,7 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: tabIcon('home', 'home-outline') }} />
       <Tabs.Screen name="practice" options={{ title: 'Practice', tabBarIcon: tabIcon('school', 'school-outline') }} />
+      <Tabs.Screen name="vocabulary" options={{ title: 'Vocab', tabBarIcon: tabIcon('library', 'library-outline') }} />
       <Tabs.Screen name="srs" options={{ title: 'Review', tabBarIcon: tabIcon('albums', 'albums-outline') }} />
       <Tabs.Screen name="roadmap" options={{ title: 'Roadmap', tabBarIcon: tabIcon('map', 'map-outline') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }} />

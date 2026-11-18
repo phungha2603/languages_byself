@@ -14,7 +14,7 @@ interface ButtonProps {
   loading?: boolean;
   fullWidth?: boolean;
   color?: string;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function Button({
@@ -55,7 +55,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        size === 'lg' ? styles.lg : styles.md,
+        size === 'lg' ? styles.lg : size === 'sm' ? styles.sm : styles.md,
         fullWidth && styles.fullWidth,
         { backgroundColor: variantStyle.backgroundColor },
         variant === 'outline' && { borderWidth: 1.5, borderColor: variantStyle.borderColor },
@@ -66,9 +66,9 @@ export function Button({
         <ActivityIndicator color={variantStyle.textColor} />
       ) : (
         <>
-          {icon && iconPosition === 'left' && <Ionicons name={icon} size={18} color={variantStyle.textColor} />}
-          <Text style={[styles.label, { color: variantStyle.textColor }]}>{label}</Text>
-          {icon && iconPosition === 'right' && <Ionicons name={icon} size={18} color={variantStyle.textColor} />}
+          {icon && iconPosition === 'left' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
+          <Text style={[styles.label, size === 'sm' && styles.labelSm, { color: variantStyle.textColor }]}>{label}</Text>
+          {icon && iconPosition === 'right' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
         </>
       )}
     </Pressable>
@@ -83,10 +83,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.pill,
   },
+  sm: { paddingVertical: 7, paddingHorizontal: spacing.md, gap: 4 },
   md: { paddingVertical: 12, paddingHorizontal: spacing.xl },
   lg: { paddingVertical: 16, paddingHorizontal: spacing.xxl },
   fullWidth: { alignSelf: 'stretch' },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.5 },
   label: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  labelSm: { fontSize: 12.5 },
 });

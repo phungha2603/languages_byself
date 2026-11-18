@@ -15,6 +15,11 @@ export class SrsController {
     return this.srsService.getDueCards(userId, limit ? Number(limit) : undefined);
   }
 
+  @Get("users/:userId/cards")
+  listAllCards(@Param("userId") userId: string) {
+    return this.srsService.listAllCards(userId);
+  }
+
   @Post("users/:userId/cards")
   addCard(@Param("userId") userId: string, @Body() dto: AddCardDto) {
     return this.srsService.addCard(userId, dto.vocabId);
