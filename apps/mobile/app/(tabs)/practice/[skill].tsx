@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useAudioPlayer, useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
-import type { Exercise, Skill } from '@app/shared-types';
+import type { Exercise, GradingResult, Skill } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { useApp } from '@/src/state/AppContext';
@@ -12,6 +12,9 @@ const SELF_RATING_OPTIONS = [
   { label: 'Partly right', accuracy: 60 },
   { label: 'Nailed it', accuracy: 95 },
 ] as const;
+
+const AI_GRADED_WRITING_TYPES = new Set(['writing_task1_report', 'writing_task2_essay']);
+const AI_GRADED_SPEAKING_TYPES = new Set(['speaking_cue_card', 'speaking_qa']);
 
 export default function PracticeSessionScreen() {
   const { skill } = useLocalSearchParams<{ skill: Skill }>();
@@ -24,6 +27,10 @@ export default function PracticeSessionScreen() {
   const [startedAt] = useState(() => Date.now());
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
+
+  const [essay, setEssay] = useState('');
+  const [transcript, setTranscript] = useState('');
 
   const [ttsUri, setTtsUri] = useState<string | null>(null);
   const [ttsLoading, setTtsLoading] = useState(false);
@@ -104,6 +111,36 @@ export default function PracticeSessionScreen() {
     }
   }
 
+  async function handleGradeWriting() {
+    if (!exercise || !userId || !essay.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api.gradeWritingExercise(exercise.id, userId, essay.trim());
+      setGradingResult(result.grading);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI grading failed (is OPENAI_API_KEY configured on the server?)');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleGradeSpeaking() {
+    if (!exercise || !userId || !transcript.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api.gradeSpeakingExercise(exercise.id, userId, transcript.trim());
+      setGradingResult(result.grading);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI grading failed (is OPENAI_API_KEY configured on the server?)');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (!userId) {
     return (
       <View style={styles.center}>
@@ -130,14 +167,41 @@ export default function PracticeSessionScreen() {
 
   if (submitted) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.title}>Attempt recorded</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>{gradingResult ? `Estimated band: ${gradingResult.overallBand}` : 'Attempt recorded'}</Text>
+        {gradingResult && (
+          <View style={styles.card}>
+            {gradingResult.criteria.map((c) => (
+              <View key={c.criterion} style={styles.criterionRow}>
+                <Text style={styles.criterionName}>
+                  {c.criterion}: Band {c.band}
+                </Text>
+                <Text style={styles.criterionRationale}>{c.rationale}</Text>
+              </View>
+            ))}
+            <Text style={styles.sectionTitle}>Feedback</Text>
+            <Text>{gradingResult.feedback}</Text>
+            {gradingResult.mistakes.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Issues found</Text>
+                {gradingResult.mistakes.map((m, i) => (
+                  <Text key={i}>
+                    • [{m.category}] {m.detail}
+                  </Text>
+                ))}
+              </>
+            )}
+          </View>
+        )}
         <Pressable style={styles.button} onPress={() => router.back()}>
           <Text style={styles.buttonText}>Back to Practice</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     );
   }
+
+  const isAiGradedWriting = AI_GRADED_WRITING_TYPES.has(exercise.type);
+  const isAiGradedSpeaking = AI_GRADED_SPEAKING_TYPES.has(exercise.type);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -167,14 +231,52 @@ export default function PracticeSessionScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>How did you do?</Text>
-      <View style={styles.row}>
-        {SELF_RATING_OPTIONS.map((opt) => (
-          <Pressable key={opt.label} style={styles.button} disabled={submitting} onPress={() => handleSelfRate(opt.accuracy)}>
-            <Text style={styles.buttonText}>{opt.label}</Text>
+      {isAiGradedWriting ? (
+        <>
+          <Text style={styles.sectionTitle}>Write your response</Text>
+          <TextInput
+            style={styles.essayInput}
+            value={essay}
+            onChangeText={setEssay}
+            multiline
+            placeholder="Type your essay here…"
+            textAlignVertical="top"
+          />
+          <Pressable style={styles.button} disabled={submitting || !essay.trim()} onPress={handleGradeWriting}>
+            <Text style={styles.buttonText}>{submitting ? 'Grading…' : 'Submit for AI grading'}</Text>
           </Pressable>
-        ))}
-      </View>
+        </>
+      ) : isAiGradedSpeaking ? (
+        <>
+          <Text style={styles.sectionTitle}>Transcript of what you said</Text>
+          <Text style={styles.hint}>
+            Voice-to-text upload isn't wired up yet — type or paste what you said (e.g. from the recording above) to get rubric
+            feedback now.
+          </Text>
+          <TextInput
+            style={styles.essayInput}
+            value={transcript}
+            onChangeText={setTranscript}
+            multiline
+            placeholder="Type your spoken response here…"
+            textAlignVertical="top"
+          />
+          <Pressable style={styles.button} disabled={submitting || !transcript.trim()} onPress={handleGradeSpeaking}>
+            <Text style={styles.buttonText}>{submitting ? 'Grading…' : 'Submit for AI grading'}</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Text style={styles.sectionTitle}>How did you do?</Text>
+          <View style={styles.row}>
+            {SELF_RATING_OPTIONS.map((opt) => (
+              <Pressable key={opt.label} style={styles.button} disabled={submitting} onPress={() => handleSelfRate(opt.accuracy)}>
+                <Text style={styles.buttonText}>{opt.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -186,8 +288,20 @@ const styles = StyleSheet.create({
   difficulty: { opacity: 0.6 },
   prompt: { fontSize: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '600' },
+  hint: { opacity: 0.6, fontSize: 12 },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   button: { backgroundColor: '#2e7d32', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
   buttonText: { color: 'white', fontWeight: '600' },
   error: { color: '#c62828' },
+  essayInput: {
+    minHeight: 160,
+    borderWidth: 1,
+    borderColor: '#00000030',
+    borderRadius: 8,
+    padding: 12,
+  },
+  card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#00000015', gap: 8 },
+  criterionRow: { marginBottom: 4 },
+  criterionName: { fontWeight: '600' },
+  criterionRationale: { opacity: 0.7 },
 });

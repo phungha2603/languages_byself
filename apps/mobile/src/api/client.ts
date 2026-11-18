@@ -2,11 +2,14 @@ import type {
   BandExitEvaluation,
   DictionaryLookupResult,
   Exercise,
+  ExerciseAttempt,
+  GradingResult,
   GrammarCheckResult,
   IeltsBandStage,
   Mistake,
   NextSessionPlan,
   Skill,
+  SpeakingPart,
   SrsRating,
   SrsState,
   SrsRetentionStats,
@@ -15,6 +18,7 @@ import type {
   TtsResult,
   User,
   WeaknessProfile,
+  WritingTaskType,
 } from "@app/shared-types";
 
 export interface SrsCardDto {
@@ -34,13 +38,25 @@ class ApiError extends Error {
   }
 }
 
+export interface AuthResult {
+  accessToken: string;
+  user: User;
+}
+
 export class ApiClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly authToken?: string | null,
+  ) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...init?.headers,
+      },
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");
@@ -56,8 +72,15 @@ export class ApiClient {
     return `${origin}${relativeUrl}`;
   }
 
-  createUser(email: string, displayName: string, targetBand?: number): Promise<User> {
-    return this.request("/users", { method: "POST", body: JSON.stringify({ email, displayName, targetBand }) });
+  createUser(email: string, displayName: string, targetBand?: number, startingStageId?: string): Promise<AuthResult> {
+    return this.request("/users", {
+      method: "POST",
+      body: JSON.stringify({ email, displayName, targetBand, startingStageId }),
+    });
+  }
+
+  loginWithGoogle(idToken: string, startingStageId?: string): Promise<AuthResult> {
+    return this.request("/auth/google", { method: "POST", body: JSON.stringify({ idToken, startingStageId }) });
   }
 
   listStages(): Promise<IeltsBandStage[]> {
@@ -110,6 +133,30 @@ export class ApiClient {
     return this.request(`/exercises/${exerciseId}/attempts?userId=${userId}`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  gradeWritingExercise(
+    exerciseId: string,
+    userId: string,
+    essay: string,
+    taskType?: WritingTaskType,
+  ): Promise<{ attempt: ExerciseAttempt; grading: GradingResult }> {
+    return this.request(`/exercises/${exerciseId}/grade-writing?userId=${userId}`, {
+      method: "POST",
+      body: JSON.stringify({ essay, taskType }),
+    });
+  }
+
+  gradeSpeakingExercise(
+    exerciseId: string,
+    userId: string,
+    transcript: string,
+    part?: SpeakingPart,
+  ): Promise<{ attempt: ExerciseAttempt; grading: GradingResult }> {
+    return this.request(`/exercises/${exerciseId}/grade-speaking?userId=${userId}`, {
+      method: "POST",
+      body: JSON.stringify({ transcript, part }),
     });
   }
 

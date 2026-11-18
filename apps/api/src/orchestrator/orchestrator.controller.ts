@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
 import { OrchestratorService } from "./orchestrator.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequireSelfGuard } from "../auth/require-self.guard";
 
 @Controller("orchestrator")
+@UseGuards(JwtAuthGuard, RequireSelfGuard)
 export class OrchestratorController {
   constructor(private readonly orchestratorService: OrchestratorService) {}
 

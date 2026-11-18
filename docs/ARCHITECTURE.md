@@ -116,7 +116,13 @@ Toàn bộ logic trên là **hàm thuần, không gọi DB/HTTP** → test đư�
 ## 7. `apps/api` — NestJS backend
 
 ### 7.1 Module hoá theo domain
-`UsersModule`, `IeltsModule`, `SrsModule`, `ExercisesModule`, `OrchestratorModule`, và nhóm `tools/`: `DictionaryModule`, `GrammarModule`, `TranslationModule`, `TtsModule`, `SttModule`.
+`UsersModule`, `IeltsModule`, `SrsModule`, `ExercisesModule`, `OrchestratorModule`, `AuthModule`, `GradingModule`, và nhóm `tools/`: `DictionaryModule`, `GrammarModule`, `TranslationModule`, `TtsModule`, `SttModule`.
+
+### 7.1b Xác thực (Google Sign-In + JWT)
+- `POST /auth/google { idToken, startingStageId? }`: xác minh Google ID token bằng `google-auth-library` (so khớp `aud` với `GOOGLE_CLIENT_IDS`, không cần client secret), tìm hoặc tạo `User` (ưu tiên khớp theo `googleId`, sau đó theo `email` để gắn tài khoản Google vào profile đã tạo thủ công trước đó), rồi phát một JWT (`@nestjs/jwt`, hết hạn sau 30 ngày).
+- `POST /users` (tạo thủ công, không qua Google) **cũng phát JWT** để luồng còn lại của API hoạt động nhất quán bất kể cách tài khoản được tạo — hữu ích khi chưa cấu hình Google OAuth hoặc đang phát triển/test.
+- `JwtAuthGuard` xác thực Bearer token; `RequireSelfGuard` (chạy sau `JwtAuthGuard`) chặn truy cập nếu `:userId`/`?userId=` trong request khác với `sub` trong token — áp dụng cho mọi endpoint theo-user (`/users/:userId`, `/ielts/users/:userId/*`, `/srs/users/:userId/*`, `/orchestrator/users/:userId/*`, `/exercises/:id/attempts|grade-writing|grade-speaking`). `GET /ielts/stages` và danh sách bài tập (`GET /exercises`) vẫn công khai vì cần hiển thị trước khi đăng nhập.
+- **Thiết lập Google OAuth thật** (bắt buộc để nút "Sign in with Google" hoạt động): vào Google Cloud Console → APIs & Services → Credentials → tạo OAuth 2.0 Client ID cho Web (và iOS/Android nếu build app thật) → copy các Client ID vào `apps/mobile/.env` (`EXPO_PUBLIC_GOOGLE_*_CLIENT_ID`, không bí mật, nhúng thẳng vào client) và `apps/api/.env` (`GOOGLE_CLIENT_IDS`, danh sách phân tách bởi dấu phẩy). Không cần client secret vì backend chỉ xác minh ID token, không đổi code lấy token.
 
 ### 7.2 Database (Prisma + PostgreSQL)
 Schema đầy đủ ở `apps/api/prisma/schema.prisma`: `User`, `IeltsStage` (dữ liệu tham chiếu, seed sẵn 5 mốc), `UserStageProgress`, `BandExitEvaluationLog` (lịch sử đánh giá gate — audit trail), `WeaknessProfileSnapshot` (cache kết quả orchestrator), `VocabItem`, `SrsCard`, `SrsReviewLog`, `Exercise`, `ExerciseAttempt`, `UserSkillDifficulty`, `StudySession`.
@@ -129,8 +135,18 @@ Schema đầy đủ ở `apps/api/prisma/schema.prisma`: `User`, `IeltsStage` (d
 | TTS | OpenAI `tts-1` | Có — `OPENAI_API_KEY` |
 | STT | OpenAI `whisper-1` | Có — `OPENAI_API_KEY` |
 | Translation | OpenAI chat completion (`gpt-4o-mini`) | Có — `OPENAI_API_KEY` |
+| AI Grading (Writing/Speaking) | OpenAI chat completion, JSON mode | Có — `OPENAI_API_KEY` |
 
 Tất cả service đều đứng sau một interface — muốn đổi sang Google Cloud Speech, Azure, DeepL hay self-host Whisper/Coqui/LanguageTool chỉ cần viết lại class service tương ứng, không đụng gì ở orchestrator hay client.
+
+### 7.3b AI Grading — chấm Writing/Speaking theo đúng rubric IELTS
+`GradingService` (`apps/api/src/grading/`) dùng một LLM (OpenAI, JSON mode) làm "examiner", nhưng được **neo chặt vào rubric thật** thay vì để mô hình tự bịa tiêu chí:
+
+- `rubrics.ts` tóm tắt (paraphrase, không copy nguyên văn) các đặc điểm phân biệt từng band 4-9 của **4 tiêu chí chính thức** cho mỗi kỹ năng — Writing Task 1: *Task Achievement*, Task 2: *Task Response*, cả hai đều có thêm *Coherence and Cohesion*, *Lexical Resource*, *Grammatical Range and Accuracy*; Speaking: *Fluency and Coherence*, *Lexical Resource*, *Grammatical Range and Accuracy*, *Pronunciation* — tổng hợp từ band descriptor công khai của IELTS (ielts.org).
+- Model chấm **độc lập từng tiêu chí** (band 0-9, bước 0.5) kèm rationale, rồi tính overall band bằng đúng quy tắc làm tròn chính thức của IELTS (trung bình 4 tiêu chí; `.25` làm tròn lên `.5`, `.75` làm tròn lên nguyên — xem `roundToIeltsBand`, có unit test).
+- Model đồng thời trích xuất lỗi cụ thể (`mistakes`) gắn nhãn chủ điểm ngữ pháp — những lỗi này **chảy thẳng vào `buildWeaknessProfile`** của orchestrator, nên bài luận/bài nói được AI chấm cũng góp phần vào theo dõi điểm yếu và gate mở khoá mốc, không phải một tính năng tách rời.
+- `POST /exercises/:id/grade-writing` / `grade-speaking`: chấm + tự ghi `ExerciseAttempt` (score/accuracy quy đổi từ band sang thang 0-100, cộng thêm `bandScore` và `rubricBreakdown` để hiển thị chi tiết). `POST /grading/writing` / `/grading/speaking` là bản độc lập, không gắn với exercise/không lưu, dùng cho luyện nhanh.
+- **Giới hạn cần biết**: đây là công cụ luyện tập, không phải điểm thi IELTS chính thức — band số do LLM chấm là ước lượng tham khảo, chưa được hiệu chỉnh (calibrate) với điểm giám khảo thật; với Speaking hiện chấm trên **transcript văn bản** (chưa phân tích phát âm/ngữ điệu từ audio thật — xem mục 9).
 
 ### 7.4 Luồng dữ liệu ví dụ: làm 1 bài tập → mở khoá mốc mới
 1. Client gọi `POST /exercises/:id/attempts` → lưu `ExerciseAttempt`.
@@ -142,18 +158,19 @@ Tất cả service đều đứng sau một interface — muốn đổi sang Goo
 ## 8. `apps/mobile` — Expo Router (iOS / Android / Web, 1 codebase)
 
 - **Điều hướng**: 5 tab — Dashboard, Practice, SRS Review, IELTS Roadmap, Settings (Expo Router, file-based).
-- **State**: `AppContext` (React Context + AsyncStorage) giữ `apiBaseUrl`, `userId`, `stageId` hiện tại — cho phép trỏ app vào bất kỳ server nào (local, staging, production) mà không cần build lại.
-- **API client** (`src/api/client.ts`): wrapper `fetch` type-safe, dùng thẳng type từ `@app/shared-types`.
-- **Âm thanh**: dùng `expo-audio` — màn luyện Nghe gọi TTS để phát prompt; màn luyện Nói cho ghi âm + nghe lại (pipeline tải lên server để STT chấm điểm tự động là việc cần làm tiếp, xem mục 9).
-- Đã build & kiểm thử thật bằng Playwright (không chỉ typecheck): tạo profile qua UI → gọi API thật → hiển thị đúng weakness profile, next-session plan, roadmap có khoá/mở khoá, SRS review rỗng/có thẻ. Phát hiện và sửa 1 bug thật (màn Practice Session bị treo loading vô hạn khi chưa có profile).
+- **State**: `AppContext` (React Context + AsyncStorage) giữ `apiBaseUrl`, `userId`, `accessToken` (JWT), `stageId` hiện tại — cho phép trỏ app vào bất kỳ server nào (local, staging, production) mà không cần build lại.
+- **API client** (`src/api/client.ts`): wrapper `fetch` type-safe, dùng thẳng type từ `@app/shared-types`, tự đính `Authorization: Bearer <token>` vào mọi request khi đã đăng nhập.
+- **Đăng nhập**: màn Settings cho chọn mốc IELTS đầu vào, sau đó hoặc bấm "Sign in with Google" (`expo-auth-session`, cần `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` — xem mục 7.1b) hoặc tạo profile thủ công (email/tên) — cả hai đều nhận về một JWT lưu qua `AppContext.login()`.
+- **Âm thanh**: dùng `expo-audio` — màn luyện Nghe gọi TTS để phát prompt; màn luyện Nói cho ghi âm + nghe lại. Màn Writing/Speaking có ô nhập bài luận/transcript và nút "Submit for AI grading" gọi thẳng `GradingService`, hiển thị band điểm từng tiêu chí + feedback (xem mục 7.3b).
+- Đã build & kiểm thử thật bằng Playwright (không chỉ typecheck): tạo profile/đăng nhập qua UI → gọi API thật (có JWT) → hiển thị đúng weakness profile, next-session plan, roadmap có khoá/mở khoá, SRS review rỗng/có thẻ. Phát hiện và sửa 2 bug thật trong quá trình này: màn Practice Session treo loading vô hạn khi chưa có profile, và `useAuthRequest` của Google Sign-In tạo lại object cấu hình + nonce ngẫu nhiên mỗi lần render gây vòng lặp re-render làm toàn bộ form Settings mất khả năng tương tác (đã sửa bằng `useMemo`).
 
 ## 9. Giới hạn hiện tại & việc cần làm tiếp
 
 Đây là **khung kiến trúc đầy đủ với các module triển khai nông** theo đúng phạm vi đã thống nhất — phần lõi (SRS, orchestrator, data model, gate mở khoá) đã triển khai đầy đủ và có test; các phần sau cần đào sâu thêm khi mở rộng:
 
 - **Ngân hàng bài tập**: hiện DB chỉ có cấu trúc `Exercise`, chưa có nội dung thật phong phú theo từng mốc IELTS — cần soạn thủ công hoặc dùng LLM để sinh bài tập theo `stageId`/`difficulty`.
-- **Chấm điểm tự động**: bài Nói/Viết hiện để người học tự đánh giá (self-rating) khi submit attempt; cần nối thêm: STT → so khớp phát âm/ngữ pháp, hoặc dùng LLM chấm theo rubric IELTS (band descriptor) cho Writing Task 1/2 và Speaking.
-- **Upload ghi âm từ mobile lên STT**: client đã ghi âm được (`expo-audio`), nhưng chưa có endpoint upload file lên server để `SttService` xử lý (hiện `SttService` nhận `audioUrl` sẵn có) — cần thêm 1 endpoint multipart upload.
-- **Auth**: chưa có đăng nhập thật (JWT/OAuth) — user hiện tạo thủ công qua `POST /users`, phù hợp giai đoạn cá nhân dùng một mình; cần thêm khi có nhiều người dùng.
+- **AI Grading đã có (mục 7.3b) nhưng Speaking mới chấm trên transcript văn bản** — chưa phân tích phát âm/ngữ điệu trực tiếp từ audio. Cần nối: **upload ghi âm từ mobile lên STT** (client đã ghi âm được bằng `expo-audio`, nhưng chưa có endpoint multipart upload — `SttService` hiện chỉ nhận `audioUrl` có sẵn) → lấy transcript tự động thay vì người dùng tự gõ lại.
+- **Band số do AI chấm là ước lượng luyện tập, chưa hiệu chỉnh với giám khảo thật** — phù hợp để luyện và theo dõi tiến bộ, không nên dùng thay thế bài thi thử có giám khảo người khi cần độ chính xác cao.
+- **Google Sign-In đã có đủ code (mục 7.1b) nhưng cần Client ID thật** — tạo OAuth 2.0 Client ID trên Google Cloud Console và điền vào `apps/mobile/.env` + `apps/api/.env` (`GOOGLE_CLIENT_IDS`) thì nút "Sign in with Google" mới hoạt động; chưa có Client ID thì vẫn dùng được app qua lối tạo profile thủ công (cũng được phát JWT như nhau).
 - **Build app thật cho iOS/Android**: đã export được bundle Web tĩnh (`expo export -p web`, deploy được lên bất kỳ static host nào); build `.ipa`/`.apk` cần chạy qua **EAS Build** (`eas build --platform ios|android`), ngoài phạm vi môi trường hiện tại.
-- **TTS/STT/Translation** cần biến môi trường `OPENAI_API_KEY` (xem `apps/api/.env.example`) mới gọi thật được.
+- **TTS/STT/Translation/AI Grading** cần biến môi trường `OPENAI_API_KEY` (xem `apps/api/.env.example`) mới gọi thật được.

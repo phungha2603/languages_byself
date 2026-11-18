@@ -12,4 +12,9 @@ export class CreateUserDto {
   @Min(0)
   @Max(9)
   targetBand?: number;
+
+  /** IELTS stage id to start at (see GET /ielts/stages). Defaults to the first stage. */
+  @IsOptional()
+  @IsString()
+  startingStageId?: string;
 }

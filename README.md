@@ -36,22 +36,24 @@ docker compose -f infra/docker-compose.yml up -d
 ```bash
 cp apps/api/.env.example apps/api/.env
 cd apps/api
+# .env.example đã có sẵn JWT_SECRET ngẫu nhiên; nếu tự tạo lại, dùng: openssl rand -hex 32
 pnpm prisma:migrate
 pnpm prisma:seed
 pnpm dev
 ```
 
-API chạy ở `http://localhost:3000/api`. TTS/STT/Translation cần thêm `OPENAI_API_KEY` vào `apps/api/.env` — Dictionary và Grammar dùng API miễn phí (dictionaryapi.dev, languagetool.org), không cần key.
+API chạy ở `http://localhost:3000/api`. TTS/STT/Translation/AI Grading cần thêm `OPENAI_API_KEY` vào `apps/api/.env` — Dictionary và Grammar dùng API miễn phí (dictionaryapi.dev, languagetool.org), không cần key. Đăng nhập Google cần `GOOGLE_CLIENT_IDS` (xem [docs/ARCHITECTURE.md §7.1b](docs/ARCHITECTURE.md)) — không có cũng không sao, app vẫn dùng được qua tạo profile thủ công.
 
 ### 4. Chạy app
 
 ```bash
 cd apps/mobile
+cp .env.example .env   # điền EXPO_PUBLIC_GOOGLE_*_CLIENT_ID nếu muốn bật Sign in with Google
 pnpm start       # mở Expo Dev Tools, quét QR bằng Expo Go
 pnpm web         # chạy trên trình duyệt
 ```
 
-Mở tab **Settings** trong app để trỏ "API base URL" (mặc định `http://localhost:3000/api`) và tạo profile.
+Mở tab **Settings** trong app để trỏ "API base URL" (mặc định `http://localhost:3000/api`), chọn mốc IELTS muốn bắt đầu, rồi đăng nhập Google hoặc tạo profile thủ công.
 
 ## Kiểm thử
 

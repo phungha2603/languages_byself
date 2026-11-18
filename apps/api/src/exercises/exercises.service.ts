@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { Skill } from "@app/shared-types";
+import type { GradingResult, Skill } from "@app/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import type { SubmitAttemptDto } from "./dto/submit-attempt.dto";
 
@@ -36,6 +36,30 @@ export class ExercisesService {
         accuracy: dto.accuracy,
         timeSpentSec: dto.timeSpentSec,
         mistakes: dto.mistakes.map((m) => ({ ...m })),
+      },
+    });
+  }
+
+  /** Persists an AI-graded Writing/Speaking attempt: band score maps to accuracy on a 0-100 scale. */
+  async recordGradedAttempt(userId: string, exerciseId: string, grading: GradingResult, sessionId?: string, timeSpentSec = 0) {
+    const exercise = await this.getById(exerciseId);
+    const accuracy = Math.round((grading.overallBand / 9) * 100);
+    return this.prisma.exerciseAttempt.create({
+      data: {
+        userId,
+        exerciseId,
+        sessionId,
+        skill: exercise.skill,
+        score: accuracy,
+        accuracy,
+        timeSpentSec,
+        mistakes: grading.mistakes.map((m) => ({ ...m })),
+        bandScore: grading.overallBand,
+        rubricBreakdown: {
+          criteria: grading.criteria.map((c) => ({ ...c })),
+          feedback: grading.feedback,
+          provider: grading.provider,
+        },
       },
     });
   }

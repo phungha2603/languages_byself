@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { SrsService } from "./srs.service";
 import { ReviewCardDto } from "./dto/review-card.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequireSelfGuard } from "../auth/require-self.guard";
 
 @Controller("srs")
+@UseGuards(JwtAuthGuard, RequireSelfGuard)
 export class SrsController {
   constructor(private readonly srsService: SrsService) {}
 

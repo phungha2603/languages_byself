@@ -13,6 +13,8 @@ import { GrammarModule } from "./tools/grammar/grammar.module";
 import { TranslationModule } from "./tools/translation/translation.module";
 import { TtsModule } from "./tools/tts/tts.module";
 import { SttModule } from "./tools/stt/stt.module";
+import { GradingModule } from "./grading/grading.module";
+import { AuthModule } from "./auth/auth.module";
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { SttModule } from "./tools/stt/stt.module";
     TranslationModule,
     TtsModule,
     SttModule,
+    GradingModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

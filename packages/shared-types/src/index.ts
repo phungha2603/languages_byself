@@ -7,3 +7,4 @@ export * from "./weakness.js";
 export * from "./orchestrator.js";
 export * from "./tools.js";
 export * from "./user.js";
+export * from "./grading.js";
