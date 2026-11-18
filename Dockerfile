@@ -16,15 +16,19 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
+# Must run before the build below: apps/api's source imports @prisma/client
+# types, which only exist once generated — without this, tsc silently
+# treats Prisma model fields as `any` instead of failing, which then
+# surfaces as "implicitly has an 'any' type" errors on code that looks
+# fine. DATABASE_URL just needs to be *set* here, not reachable — the
+# real one is injected by Railway at container start, not baked into the
+# image.
+RUN cd apps/api && DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma generate
+
 # Builds packages/shared-types, packages/srs-engine, packages/orchestrator
 # and apps/api, in dependency order (turbo resolves it from each
 # package's own `build` script).
 RUN pnpm exec turbo run build --filter=@app/api
-
-# Prisma's client needs DATABASE_URL to be *set* to generate against the
-# schema, but not reachable — the real one is injected by Railway at
-# container start, not baked into the image.
-RUN cd apps/api && DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma generate
 
 # Builds the mobile app as a static web bundle and copies it into the
 # API's static root (see apps/api/src/main.ts) so the API serves it too.
