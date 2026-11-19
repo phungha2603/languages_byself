@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet } from 'react-native';
-import type { VocabItem } from '@app/shared-types';
+import type { VocabCefrLevel, VocabItem } from '@app/shared-types';
 
 import { View } from '@/components/Themed';
 import { FlashcardSession } from '@/src/components/vocab/FlashcardSession';
@@ -16,6 +16,7 @@ export default function VocabStudyScreen() {
   const router = useRouter();
   const [words, setWords] = useState<VocabItem[] | null>(null);
   const [accent, setAccent] = useState(colors.primary);
+  const [cefrLevel, setCefrLevel] = useState<VocabCefrLevel | undefined>(undefined);
 
   useEffect(() => {
     if (!levelId || !chapter) return;
@@ -30,7 +31,10 @@ export default function VocabStudyScreen() {
       .listVocabLevels()
       .then((levels) => {
         const level = levels.find((l) => l.id === levelId);
-        if (level) setAccent(vocabLevelColors[level.cefrLevel]);
+        if (level) {
+          setAccent(vocabLevelColors[level.cefrLevel]);
+          setCefrLevel(level.cefrLevel);
+        }
       })
       .catch(() => {});
   }, [api, userId, levelId, chapter]);
@@ -43,7 +47,7 @@ export default function VocabStudyScreen() {
     );
   }
 
-  return <FlashcardSession words={words} accentColor={accent} onFinished={() => router.back()} />;
+  return <FlashcardSession words={words} accentColor={accent} cefrLevel={cefrLevel} onFinished={() => router.back()} />;
 }
 
 const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });

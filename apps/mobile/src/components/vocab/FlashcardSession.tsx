@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SRS_RATINGS, type SrsRating, type VocabItem } from '@app/shared-types';
+import { SRS_RATINGS, type SrsRating, type VocabCefrLevel, type VocabItem } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { Button, CelebrationBadge, FlipCard } from '@/src/components/ui';
+import { LevelScene } from '@/src/components/vocab/LevelScene';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
 
@@ -19,11 +20,13 @@ const RATING_META: Record<SrsRating, { color: string; icon: keyof typeof Ionicon
 interface FlashcardSessionProps {
   words: VocabItem[];
   accentColor: string;
+  /** Picks which of the 4 expedition scenes renders behind the session — omitted for mixed-level review decks. */
+  cefrLevel?: VocabCefrLevel;
   onFinished: () => void;
 }
 
 /** One flip-card-at-a-time study session, used by both a single topic deck and a cumulative review. */
-export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSessionProps) {
+export function FlashcardSession({ words, accentColor, cefrLevel, onFinished }: FlashcardSessionProps) {
   const { api, userId } = useApp();
   const { colors } = useTheme();
   const [deck, setDeck] = useState(words);
@@ -34,6 +37,9 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
   const [enrichFailed, setEnrichFailed] = useState<Set<string>>(new Set());
 
   const current = deck[index];
+  // A scene paints its own full-bleed background; without one (mixed-level review decks have no
+  // single level to depict) the screen needs its usual solid background instead of staying see-through.
+  const fallbackBg = cefrLevel ? 'transparent' : colors.background;
 
   // Most of the vocabulary bank only has a headword/POS until a learner actually opens it — fetch
   // and cache the real definition the first time this card is shown.
@@ -65,22 +71,28 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
 
   if (deck.length === 0) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.textSecondary }}>No words here yet.</Text>
-        <Button label="Back" icon="arrow-back" variant="soft" onPress={onFinished} />
+      <View style={[styles.center, { backgroundColor: fallbackBg }]}>
+        {cefrLevel && <LevelScene cefrLevel={cefrLevel} />}
+        <View style={[styles.sceneCard, { backgroundColor: colors.surface }]}>
+          <Text style={{ color: colors.textSecondary }}>No words here yet.</Text>
+          <Button label="Back" icon="arrow-back" variant="soft" onPress={onFinished} />
+        </View>
       </View>
     );
   }
 
   if (!current) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <CelebrationBadge color={colors.success} icon="checkmark-done" />
-        <Text style={[styles.doneTitle, { color: colors.textPrimary }]}>Deck complete!</Text>
-        <Text style={[styles.doneSubtitle, { color: colors.textSecondary }]}>
-          You went through {deck.length} {deck.length === 1 ? 'word' : 'words'}.
-        </Text>
-        <Button label="Back to Vocabulary" icon="arrow-back" onPress={onFinished} />
+      <View style={[styles.center, { backgroundColor: fallbackBg }]}>
+        {cefrLevel && <LevelScene cefrLevel={cefrLevel} />}
+        <View style={[styles.sceneCard, { backgroundColor: colors.surface }]}>
+          <CelebrationBadge color={colors.success} icon="checkmark-done" />
+          <Text style={[styles.doneTitle, { color: colors.textPrimary }]}>Deck complete!</Text>
+          <Text style={[styles.doneSubtitle, { color: colors.textSecondary }]}>
+            You went through {deck.length} {deck.length === 1 ? 'word' : 'words'}.
+          </Text>
+          <Button label="Back to Vocabulary" icon="arrow-back" onPress={onFinished} />
+        </View>
       </View>
     );
   }
@@ -107,8 +119,9 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
   }
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.background }]}>
-      <View style={styles.progressRow}>
+    <View style={[styles.wrap, { backgroundColor: fallbackBg }]}>
+      {cefrLevel && <LevelScene cefrLevel={cefrLevel} />}
+      <View style={[styles.progressRow, styles.progressChip, { backgroundColor: colors.surface }]}>
         <Text style={[styles.counter, { color: colors.textSecondary }]}>
           {index + 1} of {deck.length}
         </Text>
@@ -171,11 +184,20 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.lg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg },
+  wrap: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.lg, backgroundColor: 'transparent' },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.lg,
+    backgroundColor: 'transparent',
+  },
+  sceneCard: { alignItems: 'center', gap: spacing.lg, padding: spacing.xl, borderRadius: 24 },
   doneTitle: { fontFamily: fontFamily.display, fontSize: 22 },
   doneSubtitle: { fontFamily: fontFamily.regular, fontSize: 14, textAlign: 'center' },
   progressRow: { width: '100%', gap: spacing.xs, backgroundColor: 'transparent' },
+  progressChip: { padding: spacing.sm, borderRadius: 14 },
   counter: { fontFamily: fontFamily.medium, fontSize: 12, textAlign: 'center' },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
