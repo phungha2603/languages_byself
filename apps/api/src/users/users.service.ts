@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { hashPassword, verifyPassword } from "../auth/password.util";
 
 export interface GoogleProfile {
   googleId: string;
@@ -16,23 +17,41 @@ export class UsersService {
    * the first stage). Earlier stages are marked `completed` — the learner
    * self-placed past them — so the roadmap doesn't show them as locked.
    */
-  async create(email: string, displayName: string, targetBand?: number, startingStageId?: string) {
+  async create(email: string, password: string, displayName: string, targetBand?: number, startingStageId?: string) {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException("Email này đã có tài khoản — hãy đăng nhập thay vì đăng ký lại.");
+    }
     const startingStage = await this.resolveStartingStage(startingStageId);
+    const passwordHash = await hashPassword(password);
     const user = await this.prisma.user.create({
-      data: { email, displayName, currentStageId: startingStage.id, targetBand },
+      data: { email, passwordHash, displayName, currentStageId: startingStage.id, targetBand },
     });
     await this.initializeStageProgress(user.id, startingStage);
-    return user;
+    return this.sanitize(user);
+  }
+
+  /** Email+password re-login for an account that isn't Google-only. */
+  async login(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new UnauthorizedException("Email hoặc mật khẩu không đúng.");
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Tài khoản này được tạo bằng Google — hãy dùng nút "Đăng nhập với Google".');
+    }
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) throw new UnauthorizedException("Email hoặc mật khẩu không đúng.");
+    return this.sanitize(user);
   }
 
   /** Finds a user by Google account id, linking to a matching email if one already exists, else creates one. */
   async findOrCreateByGoogle(profile: GoogleProfile, startingStageId?: string) {
     const existingByGoogleId = await this.prisma.user.findUnique({ where: { googleId: profile.googleId } });
-    if (existingByGoogleId) return existingByGoogleId;
+    if (existingByGoogleId) return this.sanitize(existingByGoogleId);
 
     const existingByEmail = await this.prisma.user.findUnique({ where: { email: profile.email } });
     if (existingByEmail) {
-      return this.prisma.user.update({ where: { id: existingByEmail.id }, data: { googleId: profile.googleId } });
+      const linked = await this.prisma.user.update({ where: { id: existingByEmail.id }, data: { googleId: profile.googleId } });
+      return this.sanitize(linked);
     }
 
     const startingStage = await this.resolveStartingStage(startingStageId);
@@ -45,18 +64,25 @@ export class UsersService {
       },
     });
     await this.initializeStageProgress(user.id, startingStage);
-    return user;
+    return this.sanitize(user);
   }
 
   async findById(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User ${userId} not found`);
-    return user;
+    return this.sanitize(user);
   }
 
   async updateProfile(userId: string, data: { displayName?: string; status?: string }) {
     await this.findById(userId);
-    return this.prisma.user.update({ where: { id: userId }, data });
+    const updated = await this.prisma.user.update({ where: { id: userId }, data });
+    return this.sanitize(updated);
+  }
+
+  /** Strips the password hash before a user row ever leaves this service. */
+  private sanitize<T extends { passwordHash?: string | null }>(user: T): Omit<T, "passwordHash"> {
+    const { passwordHash: _passwordHash, ...rest } = user;
+    return rest;
   }
 
   private async resolveStartingStage(startingStageId?: string) {

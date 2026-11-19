@@ -22,7 +22,7 @@ export class UsersController {
    */
   @Post()
   async create(@Body() dto: CreateUserDto) {
-    const user = await this.usersService.create(dto.email, dto.displayName, dto.targetBand, dto.startingStageId);
+    const user = await this.usersService.create(dto.email, dto.password, dto.displayName, dto.targetBand, dto.startingStageId);
     const accessToken = await this.jwtService.signAsync({ sub: user.id, email: user.email } satisfies AuthenticatedUserPayload);
     return { accessToken, user };
   }

@@ -15,7 +15,9 @@ export default function SettingsScreen() {
   const { api, apiBaseUrl, setApiBaseUrl, userId, login } = useApp();
   const { colors } = useTheme();
   const [urlInput, setUrlInput] = useState(apiBaseUrl);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [targetBand, setTargetBand] = useState('6.5');
   const [stages, setStages] = useState<IeltsBandStage[]>([]);
@@ -60,21 +62,51 @@ export default function SettingsScreen() {
     notify('Saved', 'API base URL updated.');
   }
 
-  async function handleCreateProfile() {
-    if (!email || !displayName) {
-      notify('Missing info', 'Email and display name are required.');
+  async function handleLogin() {
+    if (!email || !password) {
+      notify('Thiếu thông tin', 'Nhập email và mật khẩu.');
       return;
     }
     setBusy(true);
     setErrorMessage(null);
     try {
-      const auth = await api.createUser(email.trim(), displayName.trim(), Number(targetBand) || undefined, selectedStageId ?? undefined);
+      const auth = await api.login(email.trim(), password);
       await login(auth);
-      notify('Profile created', `Welcome, ${auth.user.displayName}!`);
+      notify('Đã đăng nhập', `Chào mừng trở lại, ${auth.user.displayName}!`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not create profile';
+      const message = err instanceof Error ? err.message : 'Đăng nhập thất bại';
       setErrorMessage(message);
-      notify('Error', message);
+      notify('Lỗi đăng nhập', message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRegister() {
+    if (!email || !password || !displayName) {
+      notify('Thiếu thông tin', 'Email, mật khẩu và tên hiển thị là bắt buộc.');
+      return;
+    }
+    if (password.length < 8) {
+      notify('Mật khẩu quá ngắn', 'Mật khẩu cần ít nhất 8 ký tự.');
+      return;
+    }
+    setBusy(true);
+    setErrorMessage(null);
+    try {
+      const auth = await api.createUser(
+        email.trim(),
+        password,
+        displayName.trim(),
+        Number(targetBand) || undefined,
+        selectedStageId ?? undefined,
+      );
+      await login(auth);
+      notify('Đã tạo tài khoản', `Chào mừng, ${auth.user.displayName}!`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Không thể tạo tài khoản';
+      setErrorMessage(message);
+      notify('Lỗi', message);
     } finally {
       setBusy(false);
     }
@@ -147,17 +179,70 @@ export default function SettingsScreen() {
             </Card>
 
             <Card style={{ gap: spacing.sm }}>
-              <SectionLabel icon="person-add" text="Or create a profile manually" color={colors.primary} />
+              <SectionLabel icon="mail" text="Email & mật khẩu" color={colors.primary} />
+
+              <View style={[styles.modeToggle, { borderColor: colors.border }]}>
+                <Pressable style={styles.modeOption} onPress={() => setAuthMode('login')}>
+                  <View
+                    style={[
+                      styles.modeOptionInner,
+                      { backgroundColor: authMode === 'login' ? colors.primary : 'transparent' },
+                    ]}>
+                    <Text style={[styles.modeOptionText, { color: authMode === 'login' ? '#fff' : colors.textSecondary }]}>
+                      Đăng nhập
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable style={styles.modeOption} onPress={() => setAuthMode('register')}>
+                  <View
+                    style={[
+                      styles.modeOptionInner,
+                      { backgroundColor: authMode === 'register' ? colors.primary : 'transparent' },
+                    ]}>
+                    <Text style={[styles.modeOptionText, { color: authMode === 'register' ? '#fff' : colors.textSecondary }]}>
+                      Đăng ký
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+
               <Field label="Email">
-                <TextInput style={inputStyle} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholderTextColor={colors.textSecondary} />
+                <TextInput
+                  style={inputStyle}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholderTextColor={colors.textSecondary}
+                />
               </Field>
-              <Field label="Display name">
-                <TextInput style={inputStyle} value={displayName} onChangeText={setDisplayName} placeholderTextColor={colors.textSecondary} />
+              <Field label="Mật khẩu">
+                <TextInput
+                  style={inputStyle}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  placeholderTextColor={colors.textSecondary}
+                />
               </Field>
-              <Field label="Target IELTS band">
-                <TextInput style={inputStyle} value={targetBand} onChangeText={setTargetBand} keyboardType="decimal-pad" placeholderTextColor={colors.textSecondary} />
-              </Field>
-              <Button label={busy ? 'Creating…' : 'Create profile'} icon="checkmark" loading={busy} onPress={handleCreateProfile} fullWidth />
+
+              {authMode === 'register' && (
+                <>
+                  <Field label="Tên hiển thị">
+                    <TextInput style={inputStyle} value={displayName} onChangeText={setDisplayName} placeholderTextColor={colors.textSecondary} />
+                  </Field>
+                  <Field label="Mục tiêu band IELTS">
+                    <TextInput style={inputStyle} value={targetBand} onChangeText={setTargetBand} keyboardType="decimal-pad" placeholderTextColor={colors.textSecondary} />
+                  </Field>
+                </>
+              )}
+
+              {authMode === 'login' ? (
+                <Button label={busy ? 'Đang đăng nhập…' : 'Đăng nhập'} icon="log-in" loading={busy} onPress={handleLogin} fullWidth />
+              ) : (
+                <Button label={busy ? 'Đang tạo…' : 'Tạo tài khoản'} icon="checkmark" loading={busy} onPress={handleRegister} fullWidth />
+              )}
             </Card>
           </>
         )}
@@ -220,4 +305,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   googleButtonText: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  modeToggle: { flexDirection: 'row', borderWidth: 1.5, borderRadius: 999, padding: 3, gap: 3 },
+  modeOption: { flex: 1 },
+  modeOptionInner: { borderRadius: 999, paddingVertical: 8, alignItems: 'center' },
+  modeOptionText: { fontFamily: fontFamily.semibold, fontSize: 13.5 },
 });

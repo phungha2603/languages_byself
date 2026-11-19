@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import type { AuthResult } from "../api/client";
-import { ApiClient } from "../api/client";
+import { ApiClient, ApiError } from "../api/client";
 
 const STORAGE_KEYS = {
   apiBaseUrl: "englishcoach.apiBaseUrl",
@@ -59,10 +59,30 @@ export function AppProvider({ children }: PropsWithChildren) {
         AsyncStorage.getItem(STORAGE_KEYS.accessToken),
         AsyncStorage.getItem(STORAGE_KEYS.stageId),
       ]);
+      const baseUrl = storedUrl || DEFAULT_API_BASE_URL;
       if (storedUrl) setApiBaseUrlState(storedUrl);
-      if (storedUserId) setUserIdState(storedUserId);
-      if (storedToken) setAccessTokenState(storedToken);
       if (storedStage) setStageIdState(storedStage);
+
+      if (storedUserId && storedToken) {
+        // A stored session token can go stale (expired, or revoked by a password change) between
+        // app launches. Check it here rather than discovering it mid-session — an invalid token
+        // clears the stored session so Settings falls back to the login/register screen instead
+        // of silently sitting in a broken "logged in" state with every request failing.
+        try {
+          await new ApiClient(baseUrl, storedToken).getUser(storedUserId);
+          setUserIdState(storedUserId);
+          setAccessTokenState(storedToken);
+        } catch (err) {
+          const status = err instanceof ApiError ? err.status : null;
+          if (status === 401 || status === 403) {
+            await Promise.all([AsyncStorage.removeItem(STORAGE_KEYS.userId), AsyncStorage.removeItem(STORAGE_KEYS.accessToken)]);
+          } else {
+            // Network/server hiccup, not an invalid token — keep the session for when it's back.
+            setUserIdState(storedUserId);
+            setAccessTokenState(storedToken);
+          }
+        }
+      }
       setReady(true);
     })();
   }, []);

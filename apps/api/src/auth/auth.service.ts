@@ -58,4 +58,11 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync({ sub: user.id, email: user.email } satisfies AuthenticatedUserPayload);
     return { accessToken, user };
   }
+
+  /** Re-login for an email+password account (i.e. not Google-only) — same session-token shape as loginWithGoogle. */
+  async login(email: string, password: string) {
+    const user = await this.usersService.login(email, password);
+    const accessToken = await this.jwtService.signAsync({ sub: user.id, email: user.email } satisfies AuthenticatedUserPayload);
+    return { accessToken, user };
+  }
 }

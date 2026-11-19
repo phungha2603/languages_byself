@@ -64,7 +64,16 @@ export class ApiClient {
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new ApiError(response.status, body || response.statusText);
+      // Nest's error responses are JSON ({ message, statusCode, error }) — surface just the
+      // message when present, instead of dumping the raw JSON into the UI.
+      let message = body || response.statusText;
+      try {
+        const parsed = JSON.parse(body) as { message?: string | string[] };
+        if (parsed.message) message = Array.isArray(parsed.message) ? parsed.message.join(" ") : parsed.message;
+      } catch {
+        // Not JSON — use the raw body/statusText as-is.
+      }
+      throw new ApiError(response.status, message);
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
@@ -76,11 +85,21 @@ export class ApiClient {
     return `${origin}${relativeUrl}`;
   }
 
-  createUser(email: string, displayName: string, targetBand?: number, startingStageId?: string): Promise<AuthResult> {
+  createUser(
+    email: string,
+    password: string,
+    displayName: string,
+    targetBand?: number,
+    startingStageId?: string,
+  ): Promise<AuthResult> {
     return this.request("/users", {
       method: "POST",
-      body: JSON.stringify({ email, displayName, targetBand, startingStageId }),
+      body: JSON.stringify({ email, password, displayName, targetBand, startingStageId }),
     });
+  }
+
+  login(email: string, password: string): Promise<AuthResult> {
+    return this.request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
   }
 
   loginWithGoogle(idToken: string, startingStageId?: string): Promise<AuthResult> {

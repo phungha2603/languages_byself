@@ -16,6 +16,8 @@ model User {
   email          String   @unique
   /// Google's stable account id ("sub" claim), set once the user signs in with Google.
   googleId       String?  @unique
+  /// scrypt hash of the account password, as "salt:derivedKey" hex — null for Google-only accounts.
+  passwordHash   String?
   displayName    String
   /// Short free-text self-description the learner sets themselves (shown on their profile card).
   status         String?
