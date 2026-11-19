@@ -2,26 +2,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  VOCAB_UNLOCK_THRESHOLD,
-  type VocabChapterGroup,
-  type VocabLevel,
-  type VocabLevelProgress,
-  type VocabLevelStatus,
-} from '@app/shared-types';
+import { VOCAB_UNLOCK_THRESHOLD, type VocabChapterGroup, type VocabLevel, type VocabLevelProgress } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { AnimatedProgressBar, Badge, Button, Card, FadeInView, ScreenHeader } from '@/src/components/ui';
+import { ExpeditionMap } from '@/src/components/vocab/ExpeditionMap';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, spacing, useTheme } from '@/src/theme';
 import { vocabLevelColors } from '@/src/theme/vocabLevelColors';
 import { notify } from '@/src/utils/notify';
-
-const STATUS_ICON: Record<VocabLevelStatus, keyof typeof Ionicons.glyphMap> = {
-  locked: 'lock-closed',
-  unlocked: 'school',
-  completed: 'checkmark-circle',
-};
 
 export default function VocabularyIndexScreen() {
   const { api, userId } = useApp();
@@ -88,12 +77,12 @@ export default function VocabularyIndexScreen() {
   );
 
   function handlePickLevel(entry: VocabLevelProgress) {
-    if (entry.status === 'locked') {
-      notify('Level locked', `Reach ${VOCAB_UNLOCK_THRESHOLD}% mastery on the level before it to unlock this one.`);
-      return;
-    }
     setUserPickedLevel(true);
     setSelectedLevelId(entry.levelId);
+  }
+
+  function handleLockedPress() {
+    notify('Level locked', `Reach ${VOCAB_UNLOCK_THRESHOLD}% mastery on the level before it to unlock this one.`);
   }
 
   const selectedEntry = useMemo(() => progress.find((p) => p.levelId === selectedLevelId), [progress, selectedLevelId]);
@@ -111,39 +100,18 @@ export default function VocabularyIndexScreen() {
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
       <ScreenHeader title="Vocabulary" subtitle="An expedition through the words IELTS rewards" />
 
-      <View style={styles.levelRow}>
-        {progress.map((entry) => {
-          const selected = entry.levelId === selectedLevelId;
-          const levelColor = vocabLevelColors[entry.cefrLevel];
-          const locked = entry.status === 'locked';
-          return (
-            <Pressable key={entry.levelId} onPress={() => handlePickLevel(entry)}>
-              <View
-                style={[
-                  styles.levelPill,
-                  {
-                    borderColor: selected ? levelColor : colors.border,
-                    backgroundColor: selected ? levelColor : colors.surface,
-                    opacity: locked ? 0.55 : 1,
-                  },
-                ]}>
-                <Ionicons
-                  name={STATUS_ICON[entry.status]}
-                  size={13}
-                  color={selected ? colors.textOnPrimary : locked ? colors.textSecondary : levelColor}
-                />
-                <Text style={[styles.levelPillText, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
-                  {entry.cefrLevel}
-                </Text>
-                {entry.isAnchor && (
-                  <View style={[styles.anchorDot, { backgroundColor: selected ? colors.textOnPrimary : levelColor }]} />
-                )}
-              </View>
-            </Pressable>
-          );
-        })}
-        {progress.length === 0 && <ActivityIndicator color={colors.primary} />}
+      <View style={{ paddingHorizontal: spacing.lg, backgroundColor: 'transparent' }}>
+        <Text style={[styles.prologue, { color: colors.textSecondary }]}>
+          One trail, four camps, one summit. Every word you master moves you further along the expedition — tap a camp
+          below to see how far you&apos;ve come.
+        </Text>
       </View>
+
+      {progress.length === 0 ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.xl }} />
+      ) : (
+        <ExpeditionMap progress={progress} selectedLevelId={selectedLevelId} onSelectLevel={handlePickLevel} onLockedPress={handleLockedPress} />
+      )}
 
       {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
 
@@ -225,24 +193,7 @@ export default function VocabularyIndexScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingBottom: spacing.xxxl },
-  levelRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: 'transparent',
-  },
-  levelPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  levelPillText: { fontFamily: fontFamily.bold, fontSize: 14 },
-  anchorDot: { width: 5, height: 5, borderRadius: 2.5 },
+  prologue: { fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 18, marginBottom: spacing.sm },
   error: { fontFamily: fontFamily.medium, color: '#F43F5E', paddingHorizontal: spacing.lg, marginTop: spacing.sm },
   summaryHeaderRow: {
     flexDirection: 'row',
