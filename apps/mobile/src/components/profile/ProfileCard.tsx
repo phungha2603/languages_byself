@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { CEFR_LEVEL_BY_STAGE, type CefrLevel, type User, type VocabLevelProgress } from '@app/shared-types';
+import type { User, VocabLevelProgress } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { Button, Card } from '@/src/components/ui';
@@ -16,7 +16,7 @@ import { notify } from '@/src/utils/notify';
 type EditField = 'displayName' | 'status' | null;
 
 export function ProfileCard() {
-  const { api, userId, stageId, logout } = useApp();
+  const { api, userId, logout } = useApp();
   const { colors } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [progress, setProgress] = useState<VocabLevelProgress[]>([]);
@@ -46,8 +46,8 @@ export function ProfileCard() {
   }
 
   const theme = profileThemeFor(userId);
-  const level = (CEFR_LEVEL_BY_STAGE[stageId] ?? 'A1') as CefrLevel;
-  const levelColor = vocabLevelColors[level];
+  const anchorLevel = progress.find((p) => p.isAnchor) ?? progress[0];
+  const levelColor = anchorLevel ? vocabLevelColors[anchorLevel.cefrLevel] : colors.primary;
   const totalMastered = progress.reduce((sum, p) => sum + p.masteredWords, 0);
   const memberSince = new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
 
@@ -116,7 +116,7 @@ export function ProfileCard() {
         </View>
 
         <View style={styles.statsRow}>
-          <StatTile icon="ribbon" label="Level" value={level} color={levelColor} />
+          <StatTile icon="ribbon" label="Level" value={anchorLevel?.cefrLevel ?? '—'} color={levelColor} />
           <StatTile icon="flag" label="Target" value={user.targetBand ? `Band ${user.targetBand}` : '—'} color={colors.primary} />
           <StatTile icon="book" label="Words" value={String(totalMastered)} color={colors.success} />
           <StatTile icon="calendar" label="Joined" value={memberSince} color={colors.info} />

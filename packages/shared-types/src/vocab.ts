@@ -1,6 +1,27 @@
 export const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 export type CefrLevel = (typeof CEFR_LEVELS)[number];
 
+/**
+ * The Vocabulary tab's own 4-level progression (B1 -> C2). It's intentionally decoupled from
+ * the main IELTS roadmap's 5 stages: a learner starts at whichever level matches the IELTS band
+ * they're aiming for, not necessarily at the bottom, so these band ranges don't need to line up
+ * with the roadmap's stage boundaries.
+ */
+export const VOCAB_LEVELS = ["B1", "B2", "C1", "C2"] as const;
+export type VocabCefrLevel = (typeof VOCAB_LEVELS)[number];
+
+export interface VocabLevel {
+  id: string;
+  order: number;
+  cefrLevel: VocabCefrLevel;
+  minBand: number;
+  maxBand: number;
+  bandLabel: string;
+  /** This level's chapter in the overall narrative, e.g. "Part I — The Trailhead". */
+  storyTitle: string;
+  description: string;
+}
+
 export interface VocabItem {
   id: string;
   headword: string;
@@ -10,47 +31,59 @@ export interface VocabItem {
   translations: Record<string, string>;
   examples: string[];
   cefrLevel?: CefrLevel;
-  /** Groups the word into a flashcard deck within its level, e.g. "Family & People". */
-  topic?: string;
+  /** Groups the word into a flashcard deck within its level, e.g. "Base Camp Supplies". */
+  chapter?: string;
+  chapterOrder: number;
+  wordOrder: number;
   audioUrl?: string;
-  /** Which IELTS stage(s) this word is curated for. */
-  stageIds: string[];
+  vocabLevelId?: string;
 }
 
-/**
- * Each IELTS roadmap stage's curated vocabulary bank targets one CEFR level, so a user
- * reviewing vocabulary "for their target band" lands on exactly this level by default.
- */
-export const CEFR_LEVEL_BY_STAGE: Record<string, CefrLevel> = {
-  foundation: "A1",
-  "band-4-5": "A2",
-  "band-5-6": "B1",
-  "band-6-7": "B2",
-  "band-7-8": "C1",
-};
-
-/** A word deck grouped by topic within one CEFR level. */
-export interface VocabTopicGroup {
-  topic: string;
+/** A word deck grouped by chapter within one VocabLevel, ordered easy -> hard. */
+export interface VocabChapterGroup {
+  chapter: string;
+  chapterOrder: number;
   totalWords: number;
-  /** How many of this topic's words the requesting user has reviewed at least once. */
+  /** How many of this chapter's words the requesting user has reviewed at least once. */
   masteredWords: number;
   words: VocabItem[];
 }
 
-/** A stage's vocabulary mastery % at or above this unlocks the next stage's vocab bank. */
+/** A level's vocabulary mastery % at or above this unlocks the next level's vocab bank. */
 export const VOCAB_UNLOCK_THRESHOLD = 70;
 
 export type VocabLevelStatus = "locked" | "unlocked" | "completed";
 
 export interface VocabLevelProgress {
-  stageId: string;
-  cefrLevel: CefrLevel;
-  stageLabel: string;
+  levelId: string;
+  cefrLevel: VocabCefrLevel;
+  bandLabel: string;
+  storyTitle: string;
   totalWords: number;
   masteredWords: number;
   masteryPercent: number;
   status: VocabLevelStatus;
+  /** True for the single level matching the user's current target band — their default starting point. */
+  isAnchor: boolean;
+}
+
+/**
+ * Maps an IELTS target band to the VocabLevel whose range it falls in (the floor of the
+ * highest level at or below the band), so a learner lands on vocabulary matched to the band
+ * they're working toward rather than always starting from the bottom.
+ */
+export function resolveAnchorVocabLevel<T extends { order: number; minBand: number }>(
+  levels: readonly T[],
+  targetBand: number | null | undefined,
+): T | undefined {
+  if (levels.length === 0) return undefined;
+  const sorted = [...levels].sort((a, b) => a.order - b.order);
+  if (targetBand == null) return sorted[0];
+  let anchor = sorted[0];
+  for (const level of sorted) {
+    if (level.minBand <= targetBand) anchor = level;
+  }
+  return anchor;
 }
 
 export interface DictionaryLookupResult {

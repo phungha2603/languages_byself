@@ -63,7 +63,6 @@ export class DictionaryService {
         definitions,
         translations: {},
         examples,
-        stageIds: [],
       },
     });
 
@@ -80,7 +79,10 @@ export class DictionaryService {
     examples: unknown;
     cefrLevel: string | null;
     audioUrl: string | null;
-    stageIds: unknown;
+    chapter: string | null;
+    chapterOrder: number;
+    wordOrder: number;
+    vocabLevelId: string | null;
   }): VocabItem {
     return {
       id: row.id,
@@ -92,7 +94,10 @@ export class DictionaryService {
       examples: row.examples as string[],
       cefrLevel: (row.cefrLevel ?? undefined) as VocabItem["cefrLevel"],
       audioUrl: row.audioUrl ?? undefined,
-      stageIds: row.stageIds as string[],
+      chapter: row.chapter ?? undefined,
+      chapterOrder: row.chapterOrder,
+      wordOrder: row.wordOrder,
+      vocabLevelId: row.vocabLevelId ?? undefined,
     };
   }
 }

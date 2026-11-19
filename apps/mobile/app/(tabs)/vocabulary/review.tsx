@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet } from 'react-native';
-import { CEFR_LEVEL_BY_STAGE, type CefrLevel, type VocabItem } from '@app/shared-types';
+import type { VocabItem } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { Button } from '@/src/components/ui';
@@ -11,19 +11,27 @@ import { useTheme } from '@/src/theme';
 import { vocabLevelColors } from '@/src/theme/vocabLevelColors';
 
 export default function VocabCumulativeReviewScreen() {
-  const { stageId } = useLocalSearchParams<{ stageId: string }>();
+  const { levelId } = useLocalSearchParams<{ levelId: string }>();
   const { api, userId } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
   const [words, setWords] = useState<VocabItem[] | null>(null);
+  const [accent, setAccent] = useState(colors.primary);
 
   useEffect(() => {
-    if (!stageId || !userId) return;
+    if (!levelId || !userId) return;
     api
-      .listReviewableVocab(userId, stageId)
+      .listReviewableVocab(userId, levelId)
       .then(setWords)
       .catch(() => setWords([]));
-  }, [api, userId, stageId]);
+    api
+      .listVocabLevels()
+      .then((levels) => {
+        const level = levels.find((l) => l.id === levelId);
+        if (level) setAccent(vocabLevelColors[level.cefrLevel]);
+      })
+      .catch(() => {});
+  }, [api, userId, levelId]);
 
   if (!userId) {
     return (
@@ -45,15 +53,12 @@ export default function VocabCumulativeReviewScreen() {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
-          You haven't studied any words yet — go study a topic first, then come back to test yourself.
+          You haven't studied any words yet — go study a chapter first, then come back to test yourself.
         </Text>
         <Button label="Back" icon="arrow-back" variant="soft" onPress={() => router.back()} />
       </View>
     );
   }
-
-  const level = (stageId ? CEFR_LEVEL_BY_STAGE[stageId] : undefined) as CefrLevel | undefined;
-  const accent = level ? vocabLevelColors[level] : colors.primary;
 
   return <FlashcardSession words={words} accentColor={accent} onFinished={() => router.back()} />;
 }

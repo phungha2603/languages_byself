@@ -125,6 +125,24 @@ model WeaknessProfileSnapshot {
 // Vocabulary & SRS (FSRS)
 // ---------------------------------------------------------------------------
 
+/// A level in the Vocabulary tab's own progression (B1 -> C2), decoupled from the main IELTS
+/// roadmap's stages since its band boundaries don't line up 1:1 (e.g. B2 here is 5.5-6.5, not
+/// the roadmap's 5.0-6.0/6.0-7.0 split). A1/A2 are intentionally not modelled — a learner starts
+/// at whichever level matches the IELTS band they're aiming for, not necessarily from zero.
+model VocabLevel {
+  id          String @id
+  order       Int    @unique
+  cefrLevel   String
+  minBand     Float
+  maxBand     Float
+  bandLabel   String
+  /// The level's chapter in the overall "expedition" narrative, e.g. "Part I — The Trailhead".
+  storyTitle  String
+  description String
+
+  items VocabItem[]
+}
+
 model VocabItem {
   id           String   @id @default(uuid())
   headword     String
@@ -134,15 +152,19 @@ model VocabItem {
   translations Json
   examples     Json
   cefrLevel    String?
-  /// Groups words into a flashcard deck within their level (e.g. "Family & People").
-  topic        String?
+  /// Groups words into a flashcard deck within their level, e.g. "Base Camp Supplies".
+  chapter      String?
+  /// Chapters within a level, and words within a chapter, are ordered easy -> hard.
+  chapterOrder Int      @default(0)
+  wordOrder    Int      @default(0)
   audioUrl     String?
-  stageIds     Json
+  vocabLevelId String?
+  vocabLevel   VocabLevel? @relation(fields: [vocabLevelId], references: [id], onDelete: SetNull)
 
   srsCards SrsCard[]
 
   @@index([headword])
-  @@index([topic])
+  @@index([vocabLevelId, chapter])
 }
 
 enum SrsCardState {

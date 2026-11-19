@@ -17,9 +17,10 @@ import type {
   TranslationResult,
   TtsResult,
   User,
+  VocabChapterGroup,
   VocabItem,
+  VocabLevel,
   VocabLevelProgress,
-  VocabTopicGroup,
   WeaknessProfile,
   WritingTaskType,
 } from "@app/shared-types";
@@ -171,22 +172,26 @@ export class ApiClient {
     });
   }
 
-  listVocabByStage(stageId: string): Promise<VocabItem[]> {
-    return this.request(`/vocab?stageId=${encodeURIComponent(stageId)}`);
+  listVocabLevels(): Promise<VocabLevel[]> {
+    return this.request(`/vocab/levels`);
   }
 
-  listVocabTopics(stageId: string, userId?: string): Promise<VocabTopicGroup[]> {
-    const params = new URLSearchParams({ stageId });
+  listVocabByLevel(levelId: string): Promise<VocabItem[]> {
+    return this.request(`/vocab?levelId=${encodeURIComponent(levelId)}`);
+  }
+
+  listVocabChapters(levelId: string, userId?: string): Promise<VocabChapterGroup[]> {
+    const params = new URLSearchParams({ levelId });
     if (userId) params.set("userId", userId);
-    return this.request(`/vocab/topics?${params.toString()}`);
+    return this.request(`/vocab/chapters?${params.toString()}`);
   }
 
   getVocabLevelProgress(userId: string): Promise<VocabLevelProgress[]> {
     return this.request(`/vocab/progress?userId=${encodeURIComponent(userId)}`);
   }
 
-  listReviewableVocab(userId: string, uptoStageId: string): Promise<VocabItem[]> {
-    return this.request(`/vocab/review?userId=${encodeURIComponent(userId)}&uptoStageId=${encodeURIComponent(uptoStageId)}`);
+  listReviewableVocab(userId: string, uptoLevelId: string): Promise<VocabItem[]> {
+    return this.request(`/vocab/review?userId=${encodeURIComponent(userId)}&uptoLevelId=${encodeURIComponent(uptoLevelId)}`);
   }
 
   updateProfile(userId: string, data: { displayName?: string; status?: string }): Promise<User> {

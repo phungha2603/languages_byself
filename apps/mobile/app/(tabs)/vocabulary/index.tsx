@@ -3,13 +3,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  CEFR_LEVEL_BY_STAGE,
   VOCAB_UNLOCK_THRESHOLD,
-  type CefrLevel,
-  type IeltsBandStage,
+  type VocabChapterGroup,
+  type VocabLevel,
   type VocabLevelProgress,
   type VocabLevelStatus,
-  type VocabTopicGroup,
 } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
@@ -26,28 +24,30 @@ const STATUS_ICON: Record<VocabLevelStatus, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function VocabularyIndexScreen() {
-  const { api, userId, stageId } = useApp();
+  const { api, userId } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
 
-  const [stages, setStages] = useState<IeltsBandStage[]>([]);
+  const [levels, setLevels] = useState<VocabLevel[]>([]);
   const [progress, setProgress] = useState<VocabLevelProgress[]>([]);
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [userPickedLevel, setUserPickedLevel] = useState(false);
-  const [topics, setTopics] = useState<VocabTopicGroup[]>([]);
-  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [chapters, setChapters] = useState<VocabChapterGroup[]>([]);
+  const [loadingChapters, setLoadingChapters] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const defaultProgress = useCallback(
-    (stageList: IeltsBandStage[]): VocabLevelProgress[] =>
-      stageList.map((stage, i) => ({
-        stageId: stage.id,
-        cefrLevel: (CEFR_LEVEL_BY_STAGE[stage.id] ?? 'A1') as CefrLevel,
-        stageLabel: stage.label,
+    (levelList: VocabLevel[]): VocabLevelProgress[] =>
+      levelList.map((level, i) => ({
+        levelId: level.id,
+        cefrLevel: level.cefrLevel,
+        bandLabel: level.bandLabel,
+        storyTitle: level.storyTitle,
         totalWords: 0,
         masteredWords: 0,
         masteryPercent: 0,
         status: i === 0 ? 'unlocked' : 'locked',
+        isAnchor: i === 0,
       })),
     [],
   );
@@ -55,21 +55,19 @@ export default function VocabularyIndexScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const stageList = await api.listStages();
-      setStages(stageList);
-      const levelProgress = userId ? await api.getVocabLevelProgress(userId) : defaultProgress(stageList);
+      const levelList = await api.listVocabLevels();
+      setLevels(levelList);
+      const levelProgress = userId ? await api.getVocabLevelProgress(userId) : defaultProgress(levelList);
       setProgress(levelProgress);
 
       if (!userPickedLevel) {
-        const targetEntry = levelProgress.find((p) => p.stageId === stageId);
-        const fallback = [...levelProgress].reverse().find((p) => p.status !== 'locked') ?? levelProgress[0];
-        const next = targetEntry && targetEntry.status !== 'locked' ? targetEntry : fallback;
-        if (next) setSelectedStageId(next.stageId);
+        const anchorEntry = levelProgress.find((p) => p.isAnchor);
+        if (anchorEntry) setSelectedLevelId(anchorEntry.levelId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load vocabulary progress');
     }
-  }, [api, userId, stageId, userPickedLevel, defaultProgress]);
+  }, [api, userId, userPickedLevel, defaultProgress]);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,14 +77,14 @@ export default function VocabularyIndexScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!selectedStageId) return;
-      setLoadingTopics(true);
+      if (!selectedLevelId) return;
+      setLoadingChapters(true);
       api
-        .listVocabTopics(selectedStageId, userId ?? undefined)
-        .then(setTopics)
-        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load topics'))
-        .finally(() => setLoadingTopics(false));
-    }, [api, userId, selectedStageId]),
+        .listVocabChapters(selectedLevelId, userId ?? undefined)
+        .then(setChapters)
+        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load chapters'))
+        .finally(() => setLoadingChapters(false));
+    }, [api, userId, selectedLevelId]),
   );
 
   function handlePickLevel(entry: VocabLevelProgress) {
@@ -95,31 +93,31 @@ export default function VocabularyIndexScreen() {
       return;
     }
     setUserPickedLevel(true);
-    setSelectedStageId(entry.stageId);
+    setSelectedLevelId(entry.levelId);
   }
 
-  const selectedEntry = useMemo(() => progress.find((p) => p.stageId === selectedStageId), [progress, selectedStageId]);
+  const selectedEntry = useMemo(() => progress.find((p) => p.levelId === selectedLevelId), [progress, selectedLevelId]);
   const cumulativeMastered = useMemo(() => {
     if (!selectedEntry) return 0;
-    const upToOrder = stages.find((s) => s.id === selectedEntry.stageId)?.order ?? 0;
+    const upToOrder = levels.find((l) => l.id === selectedEntry.levelId)?.order ?? 0;
     return progress
-      .filter((p) => (stages.find((s) => s.id === p.stageId)?.order ?? 0) <= upToOrder)
+      .filter((p) => (levels.find((l) => l.id === p.levelId)?.order ?? 0) <= upToOrder)
       .reduce((sum, p) => sum + p.masteredWords, 0);
-  }, [progress, stages, selectedEntry]);
+  }, [progress, levels, selectedEntry]);
 
   const accent = selectedEntry ? vocabLevelColors[selectedEntry.cefrLevel] : colors.primary;
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
-      <ScreenHeader title="Vocabulary" subtitle="Level up your word bank, topic by topic" />
+      <ScreenHeader title="Vocabulary" subtitle="An expedition through the words IELTS rewards" />
 
       <View style={styles.levelRow}>
         {progress.map((entry) => {
-          const selected = entry.stageId === selectedStageId;
+          const selected = entry.levelId === selectedLevelId;
           const levelColor = vocabLevelColors[entry.cefrLevel];
           const locked = entry.status === 'locked';
           return (
-            <Pressable key={entry.stageId} onPress={() => handlePickLevel(entry)}>
+            <Pressable key={entry.levelId} onPress={() => handlePickLevel(entry)}>
               <View
                 style={[
                   styles.levelPill,
@@ -137,6 +135,9 @@ export default function VocabularyIndexScreen() {
                 <Text style={[styles.levelPillText, { color: selected ? colors.textOnPrimary : colors.textPrimary }]}>
                   {entry.cefrLevel}
                 </Text>
+                {entry.isAnchor && (
+                  <View style={[styles.anchorDot, { backgroundColor: selected ? colors.textOnPrimary : levelColor }]} />
+                )}
               </View>
             </Pressable>
           );
@@ -150,7 +151,13 @@ export default function VocabularyIndexScreen() {
         <FadeInView style={{ paddingHorizontal: spacing.lg }}>
           <Card accentColor={accent} style={{ gap: spacing.sm }}>
             <View style={styles.summaryHeaderRow}>
-              <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>{selectedEntry.stageLabel}</Text>
+              <View style={styles.summaryTitleCol}>
+                <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>{selectedEntry.storyTitle}</Text>
+                <Text style={[styles.summaryBand, { color: colors.textSecondary }]}>
+                  Band {selectedEntry.bandLabel} · {selectedEntry.cefrLevel}
+                  {selectedEntry.isAnchor ? ' · your target level' : ''}
+                </Text>
+              </View>
               <Badge
                 label={selectedEntry.status === 'completed' ? 'Mastered' : `${selectedEntry.masteryPercent}%`}
                 color={selectedEntry.status === 'completed' ? colors.success : accent}
@@ -163,42 +170,42 @@ export default function VocabularyIndexScreen() {
               {VOCAB_UNLOCK_THRESHOLD}%
             </Text>
             <Button
-              label={cumulativeMastered === 0 ? 'Study a topic first' : `Test old words (${cumulativeMastered})`}
+              label={cumulativeMastered === 0 ? 'Study a chapter first' : `Test old words (${cumulativeMastered})`}
               icon="shuffle"
               variant="soft"
               color={accent}
               disabled={cumulativeMastered === 0}
-              onPress={() => router.push({ pathname: '/vocabulary/review', params: { stageId: selectedEntry.stageId } })}
+              onPress={() => router.push({ pathname: '/vocabulary/review', params: { levelId: selectedEntry.levelId } })}
               fullWidth
             />
           </Card>
         </FadeInView>
       )}
 
-      <View style={styles.topicList}>
-        {loadingTopics && <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />}
-        {!loadingTopics &&
-          topics.map((group, i) => {
+      <View style={styles.chapterList}>
+        {loadingChapters && <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />}
+        {!loadingChapters &&
+          chapters.map((group, i) => {
             const complete = group.totalWords > 0 && group.masteredWords >= group.totalWords;
             return (
-              <FadeInView key={group.topic} delay={i * 60}>
+              <FadeInView key={group.chapter} delay={i * 60}>
                 <Pressable
                   onPress={() =>
-                    selectedStageId &&
-                    router.push({ pathname: '/vocabulary/study', params: { stageId: selectedStageId, topic: group.topic } })
+                    selectedLevelId &&
+                    router.push({ pathname: '/vocabulary/study', params: { levelId: selectedLevelId, chapter: group.chapter } })
                   }>
                   <Card accentColor={accent} style={{ gap: spacing.sm }}>
-                    <View style={styles.topicHeaderRow}>
-                      <View style={[styles.topicIcon, { backgroundColor: `${accent}1F` }]}>
-                        <Ionicons name={complete ? 'checkmark-done' : 'albums-outline'} size={18} color={accent} />
+                    <View style={styles.chapterHeaderRow}>
+                      <View style={[styles.chapterIcon, { backgroundColor: `${accent}1F` }]}>
+                        <Text style={[styles.chapterNumber, { color: accent }]}>{i + 1}</Text>
                       </View>
-                      <View style={styles.topicTitleCol}>
-                        <Text style={[styles.topicTitle, { color: colors.textPrimary }]}>{group.topic}</Text>
-                        <Text style={[styles.topicCaption, { color: colors.textSecondary }]}>
+                      <View style={styles.chapterTitleCol}>
+                        <Text style={[styles.chapterTitle, { color: colors.textPrimary }]}>{group.chapter}</Text>
+                        <Text style={[styles.chapterCaption, { color: colors.textSecondary }]}>
                           {group.masteredWords}/{group.totalWords} words
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                      <Ionicons name={complete ? 'checkmark-done' : 'chevron-forward'} size={20} color={complete ? colors.success : colors.textSecondary} />
                     </View>
                     <AnimatedProgressBar
                       value={group.totalWords === 0 ? 0 : (group.masteredWords / group.totalWords) * 100}
@@ -235,20 +242,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   levelPillText: { fontFamily: fontFamily.bold, fontSize: 14 },
+  anchorDot: { width: 5, height: 5, borderRadius: 2.5 },
   error: { fontFamily: fontFamily.medium, color: '#F43F5E', paddingHorizontal: spacing.lg, marginTop: spacing.sm },
   summaryHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     backgroundColor: 'transparent',
   },
-  summaryTitle: { fontFamily: fontFamily.semibold, fontSize: 16, flexShrink: 1 },
+  summaryTitleCol: { flex: 1, gap: 2, backgroundColor: 'transparent' },
+  summaryTitle: { fontFamily: fontFamily.display, fontSize: 17 },
+  summaryBand: { fontFamily: fontFamily.regular, fontSize: 12.5 },
   summaryCaption: { fontFamily: fontFamily.regular, fontSize: 12.5 },
-  topicList: { gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  topicHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'transparent' },
-  topicIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  topicTitleCol: { flex: 1, backgroundColor: 'transparent' },
-  topicTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
-  topicCaption: { fontFamily: fontFamily.regular, fontSize: 12 },
+  chapterList: { gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  chapterHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'transparent' },
+  chapterIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  chapterNumber: { fontFamily: fontFamily.bold, fontSize: 15 },
+  chapterTitleCol: { flex: 1, backgroundColor: 'transparent' },
+  chapterTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
+  chapterCaption: { fontFamily: fontFamily.regular, fontSize: 12 },
 });

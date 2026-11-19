@@ -7,18 +7,24 @@ import { RequireSelfGuard } from "../auth/require-self.guard";
 export class VocabController {
   constructor(private readonly vocabService: VocabService) {}
 
-  /** Public reference data — the word bank for one IELTS stage / CEFR level. */
-  @Get()
-  listByStage(@Query("stageId") stageId?: string) {
-    if (!stageId) throw new BadRequestException("stageId query param is required");
-    return this.vocabService.listByStage(stageId);
+  /** Public reference data — the 4-level progression (B1 -> C2). */
+  @Get("levels")
+  listLevels() {
+    return this.vocabService.listLevels();
   }
 
-  /** Public too (so the deck list is browsable before sign-in) — `userId` just adds mastery counts per topic. */
-  @Get("topics")
-  listTopics(@Query("stageId") stageId?: string, @Query("userId") userId?: string) {
-    if (!stageId) throw new BadRequestException("stageId query param is required");
-    return this.vocabService.listTopicsByStage(stageId, userId);
+  /** Public reference data — the word bank for one level. */
+  @Get()
+  listByLevel(@Query("levelId") levelId?: string) {
+    if (!levelId) throw new BadRequestException("levelId query param is required");
+    return this.vocabService.listByLevel(levelId);
+  }
+
+  /** Public too (so the deck list is browsable before sign-in) — `userId` just adds mastery counts per chapter. */
+  @Get("chapters")
+  listChapters(@Query("levelId") levelId?: string, @Query("userId") userId?: string) {
+    if (!levelId) throw new BadRequestException("levelId query param is required");
+    return this.vocabService.listChaptersByLevel(levelId, userId);
   }
 
   @UseGuards(JwtAuthGuard, RequireSelfGuard)
@@ -29,8 +35,8 @@ export class VocabController {
 
   @UseGuards(JwtAuthGuard, RequireSelfGuard)
   @Get("review")
-  listReviewableWords(@Query("userId") userId: string, @Query("uptoStageId") uptoStageId: string) {
-    if (!uptoStageId) throw new BadRequestException("uptoStageId query param is required");
-    return this.vocabService.listReviewableWords(userId, uptoStageId);
+  listReviewableWords(@Query("userId") userId: string, @Query("uptoLevelId") uptoLevelId: string) {
+    if (!uptoLevelId) throw new BadRequestException("uptoLevelId query param is required");
+    return this.vocabService.listReviewableWords(userId, uptoLevelId);
   }
 }

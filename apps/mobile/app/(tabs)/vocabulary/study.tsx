@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet } from 'react-native';
-import { CEFR_LEVEL_BY_STAGE, type CefrLevel, type VocabItem } from '@app/shared-types';
+import type { VocabItem } from '@app/shared-types';
 
 import { View } from '@/components/Themed';
 import { FlashcardSession } from '@/src/components/vocab/FlashcardSession';
@@ -10,22 +10,30 @@ import { useTheme } from '@/src/theme';
 import { vocabLevelColors } from '@/src/theme/vocabLevelColors';
 
 export default function VocabStudyScreen() {
-  const { stageId, topic } = useLocalSearchParams<{ stageId: string; topic: string }>();
+  const { levelId, chapter } = useLocalSearchParams<{ levelId: string; chapter: string }>();
   const { api, userId } = useApp();
   const { colors } = useTheme();
   const router = useRouter();
   const [words, setWords] = useState<VocabItem[] | null>(null);
+  const [accent, setAccent] = useState(colors.primary);
 
   useEffect(() => {
-    if (!stageId || !topic) return;
+    if (!levelId || !chapter) return;
     api
-      .listVocabTopics(stageId, userId ?? undefined)
+      .listVocabChapters(levelId, userId ?? undefined)
       .then((groups) => {
-        const match = groups.find((g) => g.topic === topic);
+        const match = groups.find((g) => g.chapter === chapter);
         setWords(match?.words ?? []);
       })
       .catch(() => setWords([]));
-  }, [api, userId, stageId, topic]);
+    api
+      .listVocabLevels()
+      .then((levels) => {
+        const level = levels.find((l) => l.id === levelId);
+        if (level) setAccent(vocabLevelColors[level.cefrLevel]);
+      })
+      .catch(() => {});
+  }, [api, userId, levelId, chapter]);
 
   if (words === null) {
     return (
@@ -34,9 +42,6 @@ export default function VocabStudyScreen() {
       </View>
     );
   }
-
-  const level = (stageId ? CEFR_LEVEL_BY_STAGE[stageId] : undefined) as CefrLevel | undefined;
-  const accent = level ? vocabLevelColors[level] : colors.primary;
 
   return <FlashcardSession words={words} accentColor={accent} onFinished={() => router.back()} />;
 }
