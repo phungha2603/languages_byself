@@ -1,12 +1,12 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, TextInput } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SRS_RATINGS, type SrsRating } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { Button, Card } from '@/src/components/ui';
+import { AnimatedProgressBar, Button, Card, FlipCard } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
 import type { SrsCardDto } from '@/src/api/client';
@@ -28,7 +28,6 @@ export default function SrsReviewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [newWord, setNewWord] = useState('');
   const [addingWord, setAddingWord] = useState(false);
-  const flip = useRef(new Animated.Value(1)).current;
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -53,11 +52,7 @@ export default function SrsReviewScreen() {
   );
 
   function handleReveal() {
-    Animated.sequence([
-      Animated.timing(flip, { toValue: 0, duration: 140, useNativeDriver: true }),
-      Animated.timing(flip, { toValue: 1, duration: 140, useNativeDriver: true }),
-    ]).start();
-    setTimeout(() => setRevealed((r) => !r), 140);
+    setRevealed((r) => !r);
   }
 
   async function handleAddWord() {
@@ -156,21 +151,26 @@ export default function SrsReviewScreen() {
         <Text style={[styles.counter, { color: colors.textSecondary }]}>
           {queue.length} of {totalDue} due
         </Text>
-        <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
-          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.primary }]} />
-        </View>
+        <AnimatedProgressBar value={progress} color={colors.primary} trackColor={colors.surfaceAlt} />
       </View>
 
-      <Animated.View style={{ width: '100%', transform: [{ scaleX: flip }] }}>
-        <Pressable onPress={handleReveal}>
-          <LinearGradient
-            colors={revealed ? [palette.violet600, palette.violet500] : [colors.surface, colors.surface]}
-            style={[styles.flashcard, { borderColor: colors.border }]}>
-            <Text style={[styles.headword, { color: revealed ? '#fff' : colors.textPrimary }]}>{current.vocabItem.headword}</Text>
-            {current.vocabItem.ipa && (
-              <Text style={[styles.ipa, { color: revealed ? '#E9D5FF' : colors.textSecondary }]}>/{current.vocabItem.ipa}/</Text>
-            )}
-            {revealed ? (
+      <Pressable style={{ width: '100%' }} onPress={handleReveal}>
+        <FlipCard
+          flipped={revealed}
+          front={
+            <View style={[styles.flashcard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.headword, { color: colors.textPrimary }]}>{current.vocabItem.headword}</Text>
+              {current.vocabItem.ipa && <Text style={[styles.ipa, { color: colors.textSecondary }]}>/{current.vocabItem.ipa}/</Text>}
+              <View style={styles.hintRow}>
+                <Ionicons name="hand-left-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to reveal</Text>
+              </View>
+            </View>
+          }
+          back={
+            <LinearGradient colors={[palette.violet600, palette.violet500]} style={[styles.flashcard, { borderColor: 'transparent' }]}>
+              <Text style={[styles.headword, { color: '#fff' }]}>{current.vocabItem.headword}</Text>
+              {current.vocabItem.ipa && <Text style={[styles.ipa, { color: '#E9D5FF' }]}>/{current.vocabItem.ipa}/</Text>}
               <View style={styles.back}>
                 {current.vocabItem.definitions.map((d, i) => (
                   <Text key={i} style={styles.definition}>
@@ -183,15 +183,10 @@ export default function SrsReviewScreen() {
                   </Text>
                 ))}
               </View>
-            ) : (
-              <View style={styles.hintRow}>
-                <Ionicons name="hand-left-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to reveal</Text>
-              </View>
-            )}
-          </LinearGradient>
-        </Pressable>
-      </Animated.View>
+            </LinearGradient>
+          }
+        />
+      </Pressable>
 
       {revealed && (
         <View style={styles.row}>
@@ -217,8 +212,6 @@ const styles = StyleSheet.create({
   doneIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   progressRow: { width: '100%', gap: spacing.xs, backgroundColor: 'transparent' },
   counter: { fontFamily: fontFamily.medium, fontSize: 12, textAlign: 'center' },
-  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 3 },
   flashcard: {
     minHeight: 240,
     borderRadius: 24,

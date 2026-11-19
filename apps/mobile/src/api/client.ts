@@ -193,6 +193,10 @@ export class ApiClient {
     return this.request(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) });
   }
 
+  getUser(userId: string): Promise<User> {
+    return this.request(`/users/${userId}`);
+  }
+
   lookupWord(word: string): Promise<DictionaryLookupResult> {
     return this.request(`/tools/dictionary?word=${encodeURIComponent(word)}`);
   }

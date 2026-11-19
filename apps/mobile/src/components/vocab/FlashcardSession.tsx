@@ -101,7 +101,7 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
             </View>
           }
           back={
-            <LinearGradient colors={[accentColor, palette.violet500]} style={styles.face}>
+            <LinearGradient colors={[accentColor, palette.violet500]} style={[styles.face, { borderColor: 'transparent' }]}>
               <Text style={styles.headwordBack}>{current.headword}</Text>
               {current.definitions.map((d, i) => (
                 <Text key={i} style={styles.definition}>

@@ -5,13 +5,14 @@ import type { IeltsBandStage } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
 import { Button, Card, ScreenHeader } from '@/src/components/ui';
+import { ProfileCard } from '@/src/components/profile/ProfileCard';
 import { useApp } from '@/src/state/AppContext';
 import { useGoogleSignIn } from '@/src/auth/useGoogleSignIn';
 import { notify } from '@/src/utils/notify';
 import { fontFamily, spacing, useTheme } from '@/src/theme';
 
 export default function SettingsScreen() {
-  const { api, apiBaseUrl, setApiBaseUrl, userId, login, logout, stageId } = useApp();
+  const { api, apiBaseUrl, setApiBaseUrl, userId, login } = useApp();
   const { colors } = useTheme();
   const [urlInput, setUrlInput] = useState(apiBaseUrl);
   const [email, setEmail] = useState('');
@@ -94,24 +95,7 @@ export default function SettingsScreen() {
         )}
 
         {userId ? (
-          <Card style={{ gap: spacing.md }}>
-            <View style={styles.profileRow}>
-              <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
-                <Ionicons name="person" size={24} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-                <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Your profile</Text>
-                <Text style={[styles.mutedMono, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {userId}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.stagePill, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="flag" size={14} color={colors.primary} />
-              <Text style={{ color: colors.textPrimary, fontFamily: fontFamily.medium, fontSize: 13 }}>Current stage: {stageId}</Text>
-            </View>
-            <Button label="Sign out" icon="log-out-outline" variant="outline" color={colors.danger} onPress={logout} fullWidth />
-          </Card>
+          <ProfileCard />
         ) : (
           <>
             <Card style={{ gap: spacing.sm }}>
@@ -224,10 +208,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: fontFamily.medium, fontSize: 12 },
   input: { borderWidth: 1, borderRadius: 12, padding: 10, fontFamily: fontFamily.regular },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12 },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: 'transparent' },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  mutedMono: { fontFamily: fontFamily.regular, fontSize: 11 },
-  stagePill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: 10 },
   stageOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1.5, borderRadius: 12, padding: spacing.sm },
   stageOptionText: { fontFamily: fontFamily.medium, fontSize: 13.5, flex: 1 },
   googleButton: {

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BandStageStatus, IeltsBandStage, StageGateDecision } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { Badge, Button, Card, ScreenHeader } from '@/src/components/ui';
+import { Badge, Button, Card, FadeInView, ScreenHeader } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, spacing, useTheme } from '@/src/theme';
 
@@ -95,7 +95,7 @@ export default function RoadmapScreen() {
           const isLast = index === stages.length - 1;
 
           return (
-            <View key={stage.id} style={styles.timelineRow}>
+            <FadeInView key={stage.id} delay={index * 70} style={styles.timelineRow}>
               <View style={styles.timelineCol}>
                 <View style={[styles.dot, { backgroundColor: locked ? colors.surfaceAlt : dotColor, borderColor: dotColor }]}>
                   <Ionicons name={STATUS_META[status].icon} size={14} color={locked ? colors.textSecondary : '#fff'} />
@@ -154,7 +154,7 @@ export default function RoadmapScreen() {
                   )}
                 </Card>
               </Pressable>
-            </View>
+            </FadeInView>
           );
         })}
         {stages.length === 0 && <ActivityIndicator color={colors.primary} />}

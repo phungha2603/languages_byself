@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SKILLS, type NextSessionPlan, type WeaknessProfile } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { Badge, Button, Card, ProgressRing, ScreenHeader } from '@/src/components/ui';
+import { Badge, Button, Card, FadeInView, ProgressRing, ScreenHeader } from '@/src/components/ui';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
 import { skillMeta } from '@/src/theme/skillMeta';
@@ -87,14 +87,16 @@ export default function DashboardScreen() {
 
       {profile && (
         <View style={styles.ringGrid}>
-          {SKILLS.map((skill) => {
+          {SKILLS.map((skill, i) => {
             const meta = skillMeta[skill];
             return (
-              <Card key={skill} style={styles.ringCard} padded>
-                <ProgressRing value={profile.skillMastery[skill]} color={meta.color} trackColor={`${meta.color}22`} size={56} strokeWidth={6} />
-                <Ionicons name={meta.icon} size={14} color={meta.color} style={{ marginTop: spacing.sm }} />
-                <Text style={[styles.ringLabel, { color: colors.textPrimary }]}>{meta.label}</Text>
-              </Card>
+              <FadeInView key={skill} delay={i * 70} style={{ flex: 1 }}>
+                <Card style={styles.ringCard} padded>
+                  <ProgressRing value={profile.skillMastery[skill]} color={meta.color} trackColor={`${meta.color}22`} size={56} strokeWidth={6} />
+                  <Ionicons name={meta.icon} size={14} color={meta.color} style={{ marginTop: spacing.sm }} />
+                  <Text style={[styles.ringLabel, { color: colors.textPrimary }]}>{meta.label}</Text>
+                </Card>
+              </FadeInView>
             );
           })}
         </View>

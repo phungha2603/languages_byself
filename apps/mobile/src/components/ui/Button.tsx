@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type GestureResponderEvent } from 'react-native';
+import { useRef } from 'react';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, fontFamily, radii, spacing } from '@/src/theme';
 
@@ -32,6 +33,7 @@ export function Button({
   const { colors } = useTheme();
   const accent = color ?? colors.primary;
   const isDisabled = disabled || loading;
+  const scale = useRef(new Animated.Value(1)).current;
 
   const variantStyle = (() => {
     switch (variant) {
@@ -49,28 +51,35 @@ export function Button({
     }
   })();
 
+  function animateTo(toValue: number) {
+    Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 8 }).start();
+  }
+
   return (
     <Pressable
       disabled={isDisabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        size === 'lg' ? styles.lg : size === 'sm' ? styles.sm : styles.md,
-        fullWidth && styles.fullWidth,
-        { backgroundColor: variantStyle.backgroundColor },
-        variant === 'outline' && { borderWidth: 1.5, borderColor: variantStyle.borderColor },
-        pressed && !isDisabled && styles.pressed,
-        isDisabled && styles.disabled,
-      ]}>
-      {loading ? (
-        <ActivityIndicator color={variantStyle.textColor} />
-      ) : (
-        <>
-          {icon && iconPosition === 'left' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
-          <Text style={[styles.label, size === 'sm' && styles.labelSm, { color: variantStyle.textColor }]}>{label}</Text>
-          {icon && iconPosition === 'right' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
-        </>
-      )}
+      onPressIn={() => !isDisabled && animateTo(0.95)}
+      onPressOut={() => animateTo(1)}>
+      <Animated.View
+        style={[
+          styles.base,
+          size === 'lg' ? styles.lg : size === 'sm' ? styles.sm : styles.md,
+          fullWidth && styles.fullWidth,
+          { backgroundColor: variantStyle.backgroundColor, transform: [{ scale }] },
+          variant === 'outline' && { borderWidth: 1.5, borderColor: variantStyle.borderColor },
+          isDisabled && styles.disabled,
+        ]}>
+        {loading ? (
+          <ActivityIndicator color={variantStyle.textColor} />
+        ) : (
+          <>
+            {icon && iconPosition === 'left' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
+            <Text style={[styles.label, size === 'sm' && styles.labelSm, { color: variantStyle.textColor }]}>{label}</Text>
+            {icon && iconPosition === 'right' && <Ionicons name={icon} size={size === 'sm' ? 15 : 18} color={variantStyle.textColor} />}
+          </>
+        )}
+      </Animated.View>
     </Pressable>
   );
 }
@@ -87,7 +96,6 @@ const styles = StyleSheet.create({
   md: { paddingVertical: 12, paddingHorizontal: spacing.xl },
   lg: { paddingVertical: 16, paddingHorizontal: spacing.xxl },
   fullWidth: { alignSelf: 'stretch' },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.5 },
   label: { fontFamily: fontFamily.semibold, fontSize: 15 },
   labelSm: { fontSize: 12.5 },
