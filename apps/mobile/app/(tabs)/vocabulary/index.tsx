@@ -7,6 +7,7 @@ import { VOCAB_UNLOCK_THRESHOLD, type VocabChapterGroup, type VocabLevel, type V
 import { Text, View } from '@/components/Themed';
 import { AnimatedProgressBar, Badge, Button, Card, FadeInView, ScreenHeader } from '@/src/components/ui';
 import { ExpeditionMap } from '@/src/components/vocab/ExpeditionMap';
+import { LevelScene } from '@/src/components/vocab/LevelScene';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, spacing, useTheme } from '@/src/theme';
 import { vocabLevelColors } from '@/src/theme/vocabLevelColors';
@@ -117,7 +118,9 @@ export default function VocabularyIndexScreen() {
 
       {selectedEntry && (
         <FadeInView style={{ paddingHorizontal: spacing.lg }}>
-          <Card accentColor={accent} style={{ gap: spacing.sm }}>
+          <Card accentColor={accent} style={{ gap: spacing.sm, overflow: 'hidden' }}>
+            <LevelScene cefrLevel={selectedEntry.cefrLevel} style={{ opacity: 0.5 }} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface, opacity: 0.68 }]} />
             <View style={styles.summaryHeaderRow}>
               <View style={styles.summaryTitleCol}>
                 <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>{selectedEntry.storyTitle}</Text>

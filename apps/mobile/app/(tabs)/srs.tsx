@@ -1,59 +1,51 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SRS_RATINGS, type SrsRating } from '@app/shared-types';
+import type { SrsRetentionStats, VocabCefrLevel } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { AnimatedProgressBar, Button, Card, FlipCard } from '@/src/components/ui';
+import { Button, Card, ProgressRing, ScreenHeader } from '@/src/components/ui';
+import { FlashcardSession } from '@/src/components/vocab/FlashcardSession';
 import { useApp } from '@/src/state/AppContext';
-import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
+import { fontFamily, spacing, useTheme } from '@/src/theme';
+import { vocabLevelColors } from '@/src/theme/vocabLevelColors';
 import type { SrsCardDto } from '@/src/api/client';
 
-const RATING_META: Record<SrsRating, { color: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  again: { color: '#F43F5E', icon: 'close' },
-  hard: { color: '#F59E0B', icon: 'remove' },
-  good: { color: '#10B981', icon: 'checkmark' },
-  easy: { color: '#6366F1', icon: 'checkmark-done' },
-};
-
 export default function SrsReviewScreen() {
-  const { api, userId } = useApp();
+  const { api, userId, stageId } = useApp();
   const { colors } = useTheme();
-  const [queue, setQueue] = useState<SrsCardDto[]>([]);
-  const [totalDue, setTotalDue] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [revealed, setRevealed] = useState(false);
+  const [queue, setQueue] = useState<SrsCardDto[] | null>(null);
+  const [retention, setRetention] = useState<SrsRetentionStats | null>(null);
+  const [sessionKey, setSessionKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [showAddWord, setShowAddWord] = useState(false);
   const [newWord, setNewWord] = useState('');
   const [addingWord, setAddingWord] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
-    setLoading(true);
     setError(null);
     try {
-      const cards = await api.getDueSrsCards(userId, 20);
+      const [cards, retentionResult] = await Promise.all([
+        api.getDueSrsCards(userId, 20),
+        api.getRetention(userId, stageId).catch(() => null),
+      ]);
       setQueue(cards);
-      setTotalDue(cards.length);
-      setRevealed(false);
+      setRetention(retentionResult);
+      // FlashcardSession copies `words` into its own state once on mount — remounting it via a
+      // changing key is what makes it pick up the freshly-reloaded due queue.
+      setSessionKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load due cards');
-    } finally {
-      setLoading(false);
     }
-  }, [api, userId]);
+  }, [api, userId, stageId]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
-
-  function handleReveal() {
-    setRevealed((r) => !r);
-  }
 
   async function handleAddWord() {
     if (!userId || !newWord.trim()) return;
@@ -67,24 +59,13 @@ export default function SrsReviewScreen() {
       }
       await api.addSrsCard(userId, lookup.entries[0].id);
       setNewWord('');
+      setShowAddWord(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add word');
     } finally {
       setAddingWord(false);
     }
-  }
-
-  async function handleRate(rating: SrsRating) {
-    if (!userId || queue.length === 0) return;
-    const [current, ...rest] = queue;
-    try {
-      await api.reviewSrsCard(userId, current.vocabId, rating);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit review');
-    }
-    setQueue(rest);
-    setRevealed(false);
   }
 
   const screenStyle = { backgroundColor: colors.background };
@@ -97,7 +78,7 @@ export default function SrsReviewScreen() {
     );
   }
 
-  if (loading) {
+  if (queue === null) {
     return (
       <View style={[styles.center, screenStyle]}>
         <ActivityIndicator color={colors.primary} />
@@ -105,101 +86,94 @@ export default function SrsReviewScreen() {
     );
   }
 
-  const addWordBox = (
-    <Card style={{ width: '100%', gap: spacing.sm }}>
-      <View style={styles.addWordHeader}>
-        <Ionicons name="add-circle" size={18} color={colors.primary} />
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Add a word to review</Text>
-      </View>
-      <View style={styles.row}>
-        <TextInput
-          style={[styles.addWordInput, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surfaceAlt }]}
-          value={newWord}
-          onChangeText={setNewWord}
-          placeholder="e.g. resilient"
-          placeholderTextColor={colors.textSecondary}
-          autoCapitalize="none"
-        />
-        <Button label={addingWord ? 'Adding…' : 'Add'} loading={addingWord} disabled={!newWord.trim()} onPress={handleAddWord} />
-      </View>
-    </Card>
+  const words = queue.map((c) => c.vocabItem);
+  const cefrLevels = new Set(words.map((w) => w.cefrLevel).filter((l): l is VocabCefrLevel => !!l));
+  const singleLevel = cefrLevels.size === 1 ? [...cefrLevels][0] : undefined;
+  const accent = singleLevel ? vocabLevelColors[singleLevel] : colors.primary;
+
+  const addWordPanel = (
+    <View style={styles.addWordWrap}>
+      <Pressable style={styles.addWordToggle} onPress={() => setShowAddWord((v) => !v)}>
+        <Ionicons name={showAddWord ? 'remove-circle-outline' : 'add-circle-outline'} size={16} color={colors.textSecondary} />
+        <Text style={[styles.addWordToggleText, { color: colors.textSecondary }]}>Add a specific word to review</Text>
+      </Pressable>
+      {showAddWord && (
+        <Card style={{ gap: spacing.sm }}>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.addWordInput, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surfaceAlt }]}
+              value={newWord}
+              onChangeText={setNewWord}
+              placeholder="e.g. resilient"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+            />
+            <Button label={addingWord ? 'Adding…' : 'Add'} loading={addingWord} disabled={!newWord.trim()} onPress={handleAddWord} />
+          </View>
+        </Card>
+      )}
+    </View>
   );
 
-  if (queue.length === 0) {
+  const statsRow = retention && (
+    <View style={styles.statsRow}>
+      <View style={styles.statsItem}>
+        <ProgressRing value={retention.retentionRate} color={colors.success} trackColor={colors.surfaceAlt} size={48} strokeWidth={5} />
+        <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Retention</Text>
+      </View>
+      <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+      <View style={styles.statsItem}>
+        <Text style={[styles.statsBigNumber, { color: colors.textPrimary }]}>{retention.matureCards}</Text>
+        <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Mature / {retention.totalCards}</Text>
+      </View>
+      <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+      <View style={styles.statsItem}>
+        <Text style={[styles.statsBigNumber, { color: colors.textPrimary }]}>{words.length}</Text>
+        <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Due now</Text>
+      </View>
+    </View>
+  );
+
+  if (words.length === 0) {
     return (
       <View style={[styles.center, screenStyle]}>
-        {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
+        {error && (
+          <View style={[styles.errorBanner, { backgroundColor: colors.dangerSoft }]}>
+            <Ionicons name="warning" size={16} color={colors.danger} />
+            <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+          </View>
+        )}
+        {statsRow}
         <View style={[styles.doneIcon, { backgroundColor: colors.successSoft }]}>
           <Ionicons name="checkmark-done" size={36} color={colors.success} />
         </View>
         <Text style={[styles.title, { color: colors.textPrimary }]}>All caught up!</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>No vocabulary due for review right now.</Text>
         <Button label="Refresh" icon="refresh" variant="soft" onPress={load} />
-        {addWordBox}
+        {addWordPanel}
       </View>
     );
   }
 
-  const current = queue[0];
-  const progress = totalDue > 0 ? ((totalDue - queue.length) / totalDue) * 100 : 0;
-
   return (
-    <View style={[styles.center, screenStyle]}>
-      {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
-
-      <View style={styles.progressRow}>
-        <Text style={[styles.counter, { color: colors.textSecondary }]}>
-          {queue.length} of {totalDue} due
-        </Text>
-        <AnimatedProgressBar value={progress} color={colors.primary} trackColor={colors.surfaceAlt} />
-      </View>
-
-      <Pressable style={{ width: '100%' }} onPress={handleReveal}>
-        <FlipCard
-          flipped={revealed}
-          front={
-            <View style={[styles.flashcard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.headword, { color: colors.textPrimary }]}>{current.vocabItem.headword}</Text>
-              {current.vocabItem.ipa && <Text style={[styles.ipa, { color: colors.textSecondary }]}>/{current.vocabItem.ipa}/</Text>}
-              <View style={styles.hintRow}>
-                <Ionicons name="hand-left-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to reveal</Text>
-              </View>
-            </View>
-          }
-          back={
-            <LinearGradient colors={[palette.violet600, palette.violet500]} style={[styles.flashcard, { borderColor: 'transparent' }]}>
-              <Text style={[styles.headword, { color: '#fff' }]}>{current.vocabItem.headword}</Text>
-              {current.vocabItem.ipa && <Text style={[styles.ipa, { color: '#E9D5FF' }]}>/{current.vocabItem.ipa}/</Text>}
-              <View style={styles.back}>
-                {current.vocabItem.definitions.map((d, i) => (
-                  <Text key={i} style={styles.definition}>
-                    {i + 1}. {d}
-                  </Text>
-                ))}
-                {current.vocabItem.examples.slice(0, 2).map((e, i) => (
-                  <Text key={i} style={styles.example}>
-                    “{e}”
-                  </Text>
-                ))}
-              </View>
-            </LinearGradient>
-          }
-        />
-      </Pressable>
-
-      {revealed && (
-        <View style={styles.row}>
-          {SRS_RATINGS.map((rating) => {
-            const meta = RATING_META[rating];
-            return (
-              <Button key={rating} label={rating} icon={meta.icon} color={meta.color} onPress={() => handleRate(rating)} />
-            );
-          })}
+    <View style={[{ flex: 1 }, screenStyle]}>
+      <ScreenHeader title="Review" subtitle="Spaced repetition across everything you've studied" />
+      {statsRow}
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: colors.dangerSoft, marginHorizontal: spacing.lg }]}>
+          <Ionicons name="warning" size={16} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </View>
       )}
-
-      {addWordBox}
+      <FlashcardSession
+        key={sessionKey}
+        words={words}
+        accentColor={accent}
+        cefrLevel={singleLevel}
+        finishedLabel="Done for now"
+        onFinished={load}
+      />
+      {addWordPanel}
     </View>
   );
 }
@@ -207,29 +181,26 @@ export default function SrsReviewScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg },
   title: { fontFamily: fontFamily.display, fontSize: 22 },
-  sectionTitle: { fontFamily: fontFamily.semibold, fontSize: 14 },
   subtitle: { fontFamily: fontFamily.regular, fontSize: 14 },
   doneIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
-  progressRow: { width: '100%', gap: spacing.xs, backgroundColor: 'transparent' },
-  counter: { fontFamily: fontFamily.medium, fontSize: 12, textAlign: 'center' },
-  flashcard: {
-    minHeight: 240,
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: spacing.xl,
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center', backgroundColor: 'transparent' },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12 },
+  errorText: { fontFamily: fontFamily.medium, flex: 1, fontSize: 13 },
+  addWordInput: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, fontFamily: fontFamily.regular },
+  addWordWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm, backgroundColor: 'transparent' },
+  addWordToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', padding: spacing.sm },
+  addWordToggleText: { fontFamily: fontFamily.medium, fontSize: 12.5 },
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: 'transparent',
   },
-  headword: { fontFamily: fontFamily.display, fontSize: 30 },
-  ipa: { fontFamily: fontFamily.regular, fontSize: 14 },
-  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.lg, backgroundColor: 'transparent' },
-  hint: { fontFamily: fontFamily.regular, fontSize: 13 },
-  back: { marginTop: spacing.lg, gap: 6, alignSelf: 'stretch', backgroundColor: 'transparent' },
-  definition: { fontSize: 15, fontFamily: fontFamily.regular, color: '#fff' },
-  example: { fontStyle: 'italic', fontFamily: fontFamily.regular, color: '#E9D5FF' },
-  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center', backgroundColor: 'transparent' },
-  error: { fontFamily: fontFamily.medium },
-  addWordHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'transparent' },
-  addWordInput: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, fontFamily: fontFamily.regular },
+  statsItem: { alignItems: 'center', gap: 2, backgroundColor: 'transparent' },
+  statsDivider: { width: 1, height: 36 },
+  statsBigNumber: { fontFamily: fontFamily.display, fontSize: 24 },
+  statsLabel: { fontFamily: fontFamily.regular, fontSize: 11 },
 });

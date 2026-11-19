@@ -22,11 +22,13 @@ interface FlashcardSessionProps {
   accentColor: string;
   /** Picks which of the 4 expedition scenes renders behind the session — omitted for mixed-level review decks. */
   cefrLevel?: VocabCefrLevel;
+  /** Label on the completion screen's button — callers reuse this component outside the Vocab tab too. */
+  finishedLabel?: string;
   onFinished: () => void;
 }
 
-/** One flip-card-at-a-time study session, used by both a single topic deck and a cumulative review. */
-export function FlashcardSession({ words, accentColor, cefrLevel, onFinished }: FlashcardSessionProps) {
+/** One flip-card-at-a-time study session, used by both a single topic deck and a cumulative/SRS review. */
+export function FlashcardSession({ words, accentColor, cefrLevel, finishedLabel = 'Back to Vocabulary', onFinished }: FlashcardSessionProps) {
   const { api, userId } = useApp();
   const { colors } = useTheme();
   const [deck, setDeck] = useState(words);
@@ -91,7 +93,7 @@ export function FlashcardSession({ words, accentColor, cefrLevel, onFinished }: 
           <Text style={[styles.doneSubtitle, { color: colors.textSecondary }]}>
             You went through {deck.length} {deck.length === 1 ? 'word' : 'words'}.
           </Text>
-          <Button label="Back to Vocabulary" icon="arrow-back" onPress={onFinished} />
+          <Button label={finishedLabel} icon="arrow-back" onPress={onFinished} />
         </View>
       </View>
     );

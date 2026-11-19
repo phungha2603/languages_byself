@@ -33,7 +33,7 @@ export interface SrsCardDto {
   stability: number;
   difficulty: number;
   state: SrsState;
-  vocabItem: { id: string; headword: string; definitions: string[]; examples: string[]; ipa?: string };
+  vocabItem: VocabItem;
 }
 
 class ApiError extends Error {

@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const google = useGoogleSignIn();
 
@@ -247,20 +248,27 @@ export default function SettingsScreen() {
           </>
         )}
 
-        <Card style={{ gap: spacing.sm }}>
-          <SectionLabel icon="server" text="Backend connection" color={colors.textSecondary} />
-          <Field label="API base URL">
-            <TextInput
-              style={inputStyle}
-              value={urlInput}
-              onChangeText={setUrlInput}
-              placeholder="http://localhost:3000/api"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="none"
-            />
-          </Field>
-          <Button label="Save URL" icon="save-outline" variant="soft" onPress={handleSaveUrl} fullWidth />
-        </Card>
+        <Pressable onPress={() => setShowAdvanced((v) => !v)} style={styles.advancedToggle}>
+          <Ionicons name={showAdvanced ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.textSecondary} />
+          <Text style={[styles.advancedToggleText, { color: colors.textSecondary }]}>Advanced</Text>
+        </Pressable>
+
+        {showAdvanced && (
+          <Card style={{ gap: spacing.sm }}>
+            <SectionLabel icon="server" text="Backend connection" color={colors.textSecondary} />
+            <Field label="API base URL">
+              <TextInput
+                style={inputStyle}
+                value={urlInput}
+                onChangeText={setUrlInput}
+                placeholder="http://localhost:3000/api"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+              />
+            </Field>
+            <Button label="Save URL" icon="save-outline" variant="soft" onPress={handleSaveUrl} fullWidth />
+          </Card>
+        )}
       </View>
     </ScrollView>
   );
@@ -287,6 +295,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const styles = StyleSheet.create({
   content: { paddingBottom: spacing.xxxl },
+  advancedToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'center', padding: spacing.xs },
+  advancedToggleText: { fontFamily: fontFamily.medium, fontSize: 12.5 },
   cardTitle: { fontFamily: fontFamily.semibold, fontSize: 15 },
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'transparent' },
   hint: { fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 17 },

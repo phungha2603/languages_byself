@@ -62,7 +62,10 @@ export default function PracticeSessionScreen() {
     setError(null);
     try {
       const exercises = await api.listExercises(stageId, skill);
-      setExercise(exercises[0] ?? null);
+      // Pick randomly rather than always the easiest — otherwise this screen serves the exact
+      // same exercise every single time there's more than one available for this skill/stage.
+      const picked = exercises.length > 0 ? exercises[Math.floor(Math.random() * exercises.length)]! : null;
+      setExercise(picked);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load exercise');
     } finally {
@@ -200,18 +203,30 @@ export default function PracticeSessionScreen() {
 
         {gradingResult && (
           <Card style={{ gap: spacing.md }}>
-            {gradingResult.criteria.map((c) => (
-              <View key={c.criterion} style={styles.criterionBlock}>
-                <View style={styles.criterionHeader}>
-                  <Text style={[styles.criterionName, { color: colors.textPrimary }]}>{c.criterion}</Text>
-                  <Badge label={`Band ${c.band}`} color={bandColor(c.band, colors)} />
+            {[...gradingResult.criteria]
+              .sort((a, b) => a.band - b.band)
+              .map((c, i) => (
+                <View
+                  key={c.criterion}
+                  style={[
+                    styles.criterionBlock,
+                    i === 0 && gradingResult.criteria.length > 1 && [styles.weakestCriterion, { borderColor: colors.danger }],
+                  ]}>
+                  <View style={styles.criterionHeader}>
+                    <View style={styles.criterionNameRow}>
+                      <Text style={[styles.criterionName, { color: colors.textPrimary }]}>{c.criterion}</Text>
+                      {i === 0 && gradingResult.criteria.length > 1 && (
+                        <Badge label="Biggest opportunity" color={colors.danger} icon="trending-up" />
+                      )}
+                    </View>
+                    <Badge label={`Band ${c.band}`} color={bandColor(c.band, colors)} />
+                  </View>
+                  <View style={[styles.miniTrack, { backgroundColor: colors.surfaceAlt }]}>
+                    <View style={[styles.miniFill, { width: `${(c.band / 9) * 100}%`, backgroundColor: bandColor(c.band, colors) }]} />
+                  </View>
+                  <Text style={[styles.criterionRationale, { color: colors.textSecondary }]}>{c.rationale}</Text>
                 </View>
-                <View style={[styles.miniTrack, { backgroundColor: colors.surfaceAlt }]}>
-                  <View style={[styles.miniFill, { width: `${(c.band / 9) * 100}%`, backgroundColor: bandColor(c.band, colors) }]} />
-                </View>
-                <Text style={[styles.criterionRationale, { color: colors.textSecondary }]}>{c.rationale}</Text>
-              </View>
-            ))}
+              ))}
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Feedback</Text>
@@ -370,12 +385,14 @@ const styles = StyleSheet.create({
   resultHero: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, borderRadius: 20 },
   resultTitle: { fontFamily: fontFamily.display, fontSize: 24 },
   criterionBlock: { gap: 6, backgroundColor: 'transparent' },
+  weakestCriterion: { borderWidth: 1.5, borderRadius: 12, padding: spacing.sm },
   criterionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
+  criterionNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1, backgroundColor: 'transparent' },
   criterionName: { fontFamily: fontFamily.semibold, fontSize: 14 },
   criterionRationale: { fontFamily: fontFamily.regular, fontSize: 12.5, lineHeight: 17 },
   miniTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },

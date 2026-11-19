@@ -7,3 +7,4 @@ export { FlipCard } from './FlipCard';
 export { AnimatedProgressBar } from './AnimatedProgressBar';
 export { FadeInView } from './FadeInView';
 export { CelebrationBadge } from './CelebrationBadge';
+export { Sparkline } from './Sparkline';

@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SKILLS, type NextSessionPlan, type WeaknessProfile } from '@app/shared-types';
+import { SKILLS, type NextSessionPlan, type VocabCefrLevel, type WeaknessProfile } from '@app/shared-types';
 
 import { Text, View } from '@/components/Themed';
-import { Badge, Button, Card, FadeInView, ProgressRing, ScreenHeader } from '@/src/components/ui';
+import { Badge, Button, Card, CelebrationBadge, FadeInView, ProgressRing, ScreenHeader, Sparkline } from '@/src/components/ui';
+import { LevelScene } from '@/src/components/vocab/LevelScene';
 import { useApp } from '@/src/state/AppContext';
 import { fontFamily, palette, spacing, useTheme } from '@/src/theme';
 import { skillMeta } from '@/src/theme/skillMeta';
@@ -17,6 +18,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<WeaknessProfile | null>(null);
   const [plan, setPlan] = useState<NextSessionPlan | null>(null);
+  const [anchorLevel, setAnchorLevel] = useState<VocabCefrLevel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,12 +27,14 @@ export default function DashboardScreen() {
     setLoading(true);
     setError(null);
     try {
-      const [profileResult, planResult] = await Promise.all([
+      const [profileResult, planResult, vocabProgress] = await Promise.all([
         api.getWeaknessProfile(userId, stageId),
         api.getNextSessionPlan(userId, stageId),
+        api.getVocabLevelProgress(userId).catch(() => []),
       ]);
       setProfile(profileResult);
       setPlan(planResult);
+      setAnchorLevel(vocabProgress.find((p) => p.isAnchor)?.cefrLevel ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {
@@ -72,7 +76,14 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}>
       <ScreenHeader title="Dashboard" subtitle={`Stage · ${stageId}`} />
 
-      <LinearGradient colors={[palette.violet700, palette.violet500]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+      <View style={styles.heroCard}>
+        {anchorLevel && <LevelScene cefrLevel={anchorLevel} />}
+        <LinearGradient
+          colors={[`${colors.primaryPressed}E6`, `${colors.primary}CC`]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.heroRow}>
           <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             <Text style={styles.heroLabel}>Overall mastery</Text>
@@ -80,42 +91,81 @@ export default function DashboardScreen() {
           </View>
           <ProgressRing value={overallMastery} color="#fff" trackColor="#FFFFFF33" size={64} strokeWidth={6} />
         </View>
-      </LinearGradient>
+      </View>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: colors.dangerSoft }]}>
+          <Ionicons name="warning" size={16} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+        </View>
+      )}
       {!profile && loading && <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />}
 
       {profile && (
         <View style={styles.ringGrid}>
           {SKILLS.map((skill, i) => {
             const meta = skillMeta[skill];
+            const trend = profile.skillAccuracyTrend[skill];
             return (
               <FadeInView key={skill} delay={i * 70} style={{ flex: 1 }}>
-                <Card style={styles.ringCard} padded>
-                  <ProgressRing value={profile.skillMastery[skill]} color={meta.color} trackColor={`${meta.color}22`} size={56} strokeWidth={6} />
-                  <Ionicons name={meta.icon} size={14} color={meta.color} style={{ marginTop: spacing.sm }} />
-                  <Text style={[styles.ringLabel, { color: colors.textPrimary }]}>{meta.label}</Text>
-                </Card>
+                <Pressable onPress={() => router.push(`/practice/${skill}`)}>
+                  <Card style={styles.ringCard} padded>
+                    <ProgressRing value={profile.skillMastery[skill]} color={meta.color} trackColor={`${meta.color}22`} size={56} strokeWidth={6} />
+                    <Ionicons name={meta.icon} size={14} color={meta.color} style={{ marginTop: spacing.sm }} />
+                    <Text style={[styles.ringLabel, { color: colors.textPrimary }]}>{meta.label}</Text>
+                    <View style={{ marginTop: 4, backgroundColor: 'transparent' }}>
+                      {trend.length >= 2 ? (
+                        <Sparkline data={trend} color={meta.color} />
+                      ) : (
+                        <Text style={[styles.sparklinePlaceholder, { color: colors.textSecondary }]}>No data yet</Text>
+                      )}
+                    </View>
+                  </Card>
+                </Pressable>
               </FadeInView>
             );
           })}
         </View>
       )}
 
-      {profile && profile.grammarWeaknesses.length > 0 && (
-        <Card>
+      {profile &&
+        (profile.grammarWeaknesses.length > 0 ? (
+          <Card>
+            <View style={styles.cardHeaderRow}>
+              <Ionicons name="alert-circle" size={18} color={colors.warning} />
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recurring grammar issues</Text>
+            </View>
+            {profile.grammarWeaknesses.slice(0, 5).map((w) => (
+              <View key={w.topic} style={styles.bulletRow}>
+                <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
+                  {w.topic.replace(/_/g, ' ')} · seen {w.occurrences}x
+                </Text>
+                <Badge label={`${w.masteryScore}%`} color={w.masteryScore < 70 ? colors.danger : colors.success} />
+              </View>
+            ))}
+          </Card>
+        ) : (
+          <Card style={styles.allClearCard}>
+            <CelebrationBadge color={colors.success} icon="shield-checkmark" size={56} />
+            <Text style={[styles.allClearText, { color: colors.textPrimary }]}>No recurring grammar issues right now</Text>
+          </Card>
+        ))}
+
+      {profile && profile.vocabWeaknesses.length > 0 && (
+        <Card accentColor={colors.danger}>
           <View style={styles.cardHeaderRow}>
-            <Ionicons name="alert-circle" size={18} color={colors.warning} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recurring grammar issues</Text>
+            <Ionicons name="trending-down" size={18} color={colors.danger} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Words slipping away</Text>
           </View>
-          {profile.grammarWeaknesses.slice(0, 5).map((w) => (
-            <View key={w.topic} style={styles.bulletRow}>
-              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
-                {w.topic.replace(/_/g, ' ')} · seen {w.occurrences}x
-              </Text>
-              <Badge label={`${w.masteryScore}%`} color={w.masteryScore < 70 ? colors.danger : colors.success} />
+          {profile.vocabWeaknesses.slice(0, 5).map((w) => (
+            <View key={w.vocabId} style={styles.bulletRow}>
+              <Text style={[styles.bulletText, { color: colors.textSecondary, textTransform: 'none' }]}>{w.headword}</Text>
+              <Badge label={`${w.lapses} lapse${w.lapses === 1 ? '' : 's'}`} color={colors.danger} />
             </View>
           ))}
+          <View style={{ marginTop: spacing.sm, backgroundColor: 'transparent' }}>
+            <Button label="Review in Vocabulary" icon="refresh" variant="soft" color={colors.danger} onPress={() => router.push('/vocabulary')} fullWidth />
+          </View>
         </Card>
       )}
 
@@ -146,7 +196,7 @@ const styles = StyleSheet.create({
   welcomeIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   welcomeTitle: { fontFamily: fontFamily.display, fontSize: 22, textAlign: 'center' },
   subtitle: { textAlign: 'center', fontFamily: fontFamily.regular, fontSize: 14, marginBottom: spacing.sm },
-  heroCard: { borderRadius: 24, padding: spacing.xl },
+  heroCard: { borderRadius: 24, padding: spacing.xl, overflow: 'hidden' },
   heroRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' },
   heroLabel: { color: '#E9D5FF', fontFamily: fontFamily.medium, fontSize: 13 },
   heroValue: { color: '#fff', fontFamily: fontFamily.display, fontSize: 34, marginTop: 2 },
@@ -172,5 +222,9 @@ const styles = StyleSheet.create({
   bulletText: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1, textTransform: 'capitalize' },
   rationale: { fontFamily: fontFamily.regular, fontSize: 13, flex: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  error: { color: '#c62828', fontFamily: fontFamily.medium },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 12 },
+  errorText: { fontFamily: fontFamily.medium, flex: 1, fontSize: 13 },
+  sparklinePlaceholder: { fontFamily: fontFamily.regular, fontSize: 10 },
+  allClearCard: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
+  allClearText: { fontFamily: fontFamily.medium, fontSize: 13.5, textAlign: 'center' },
 });
