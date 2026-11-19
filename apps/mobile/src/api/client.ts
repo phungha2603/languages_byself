@@ -18,6 +18,8 @@ import type {
   TtsResult,
   User,
   VocabItem,
+  VocabLevelProgress,
+  VocabTopicGroup,
   WeaknessProfile,
   WritingTaskType,
 } from "@app/shared-types";
@@ -171,6 +173,24 @@ export class ApiClient {
 
   listVocabByStage(stageId: string): Promise<VocabItem[]> {
     return this.request(`/vocab?stageId=${encodeURIComponent(stageId)}`);
+  }
+
+  listVocabTopics(stageId: string, userId?: string): Promise<VocabTopicGroup[]> {
+    const params = new URLSearchParams({ stageId });
+    if (userId) params.set("userId", userId);
+    return this.request(`/vocab/topics?${params.toString()}`);
+  }
+
+  getVocabLevelProgress(userId: string): Promise<VocabLevelProgress[]> {
+    return this.request(`/vocab/progress?userId=${encodeURIComponent(userId)}`);
+  }
+
+  listReviewableVocab(userId: string, uptoStageId: string): Promise<VocabItem[]> {
+    return this.request(`/vocab/review?userId=${encodeURIComponent(userId)}&uptoStageId=${encodeURIComponent(uptoStageId)}`);
+  }
+
+  updateProfile(userId: string, data: { displayName?: string; status?: string }): Promise<User> {
+    return this.request(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) });
   }
 
   lookupWord(word: string): Promise<DictionaryLookupResult> {

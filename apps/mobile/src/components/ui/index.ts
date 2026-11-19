@@ -3,3 +3,7 @@ export { Button } from './Button';
 export { Badge } from './Badge';
 export { ProgressRing } from './ProgressRing';
 export { ScreenHeader } from './ScreenHeader';
+export { FlipCard } from './FlipCard';
+export { AnimatedProgressBar } from './AnimatedProgressBar';
+export { FadeInView } from './FadeInView';
+export { CelebrationBadge } from './CelebrationBadge';

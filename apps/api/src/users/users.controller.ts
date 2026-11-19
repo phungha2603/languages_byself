@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequireSelfGuard } from "../auth/require-self.guard";
 import type { AuthenticatedUserPayload } from "../auth/auth.service";
@@ -30,5 +31,11 @@ export class UsersController {
   @Get(":userId")
   findOne(@Param("userId") userId: string) {
     return this.usersService.findById(userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RequireSelfGuard)
+  @Patch(":userId")
+  updateProfile(@Param("userId") userId: string, @Body() dto: UpdateProfileDto) {
+    return this.usersService.updateProfile(userId, dto);
   }
 }

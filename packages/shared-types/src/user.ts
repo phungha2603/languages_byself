@@ -2,6 +2,8 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  /** Short free-text self-description the learner sets themselves. */
+  status?: string;
   createdAt: string;
   currentStageId: string;
   targetBand?: number;

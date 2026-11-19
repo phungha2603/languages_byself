@@ -10,6 +10,8 @@ export interface VocabItem {
   translations: Record<string, string>;
   examples: string[];
   cefrLevel?: CefrLevel;
+  /** Groups the word into a flashcard deck within its level, e.g. "Family & People". */
+  topic?: string;
   audioUrl?: string;
   /** Which IELTS stage(s) this word is curated for. */
   stageIds: string[];
@@ -26,6 +28,30 @@ export const CEFR_LEVEL_BY_STAGE: Record<string, CefrLevel> = {
   "band-6-7": "B2",
   "band-7-8": "C1",
 };
+
+/** A word deck grouped by topic within one CEFR level. */
+export interface VocabTopicGroup {
+  topic: string;
+  totalWords: number;
+  /** How many of this topic's words the requesting user has reviewed at least once. */
+  masteredWords: number;
+  words: VocabItem[];
+}
+
+/** A stage's vocabulary mastery % at or above this unlocks the next stage's vocab bank. */
+export const VOCAB_UNLOCK_THRESHOLD = 70;
+
+export type VocabLevelStatus = "locked" | "unlocked" | "completed";
+
+export interface VocabLevelProgress {
+  stageId: string;
+  cefrLevel: CefrLevel;
+  stageLabel: string;
+  totalWords: number;
+  masteredWords: number;
+  masteryPercent: number;
+  status: VocabLevelStatus;
+}
 
 export interface DictionaryLookupResult {
   query: string;

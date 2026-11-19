@@ -54,6 +54,11 @@ export class UsersService {
     return user;
   }
 
+  async updateProfile(userId: string, data: { displayName?: string; status?: string }) {
+    await this.findById(userId);
+    return this.prisma.user.update({ where: { id: userId }, data });
+  }
+
   private async resolveStartingStage(startingStageId?: string) {
     const stages = await this.prisma.ieltsStage.findMany({ orderBy: { order: "asc" } });
     if (stages.length === 0) {

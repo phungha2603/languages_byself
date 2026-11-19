@@ -17,6 +17,8 @@ model User {
   /// Google's stable account id ("sub" claim), set once the user signs in with Google.
   googleId       String?  @unique
   displayName    String
+  /// Short free-text self-description the learner sets themselves (shown on their profile card).
+  status         String?
   createdAt      DateTime @default(now())
   currentStageId String
   targetBand     Float?
@@ -132,12 +134,15 @@ model VocabItem {
   translations Json
   examples     Json
   cefrLevel    String?
+  /// Groups words into a flashcard deck within their level (e.g. "Family & People").
+  topic        String?
   audioUrl     String?
   stageIds     Json
 
   srsCards SrsCard[]
 
   @@index([headword])
+  @@index([topic])
 }
 
 enum SrsCardState {
