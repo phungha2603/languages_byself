@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,11 +26,44 @@ interface FlashcardSessionProps {
 export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSessionProps) {
   const { api, userId } = useApp();
   const { colors } = useTheme();
+  const [deck, setDeck] = useState(words);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [rating, setRating] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichFailed, setEnrichFailed] = useState<Set<string>>(new Set());
 
-  if (words.length === 0) {
+  const current = deck[index];
+
+  // Most of the vocabulary bank only has a headword/POS until a learner actually opens it — fetch
+  // and cache the real definition the first time this card is shown.
+  useEffect(() => {
+    if (!current || current.definitions.length > 0 || enrichFailed.has(current.id)) return;
+    let cancelled = false;
+    setEnriching(true);
+    api
+      .enrichVocabWord(current.id)
+      .then((updated) => {
+        if (cancelled) return;
+        if (updated.definitions.length === 0) {
+          setEnrichFailed((prev) => new Set(prev).add(current.id));
+          return;
+        }
+        setDeck((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+      })
+      .catch(() => {
+        if (!cancelled) setEnrichFailed((prev) => new Set(prev).add(current.id));
+      })
+      .finally(() => {
+        if (!cancelled) setEnriching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id]);
+
+  if (deck.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.textSecondary }}>No words here yet.</Text>
@@ -39,21 +72,21 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
     );
   }
 
-  if (index >= words.length) {
+  if (!current) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <CelebrationBadge color={colors.success} icon="checkmark-done" />
         <Text style={[styles.doneTitle, { color: colors.textPrimary }]}>Deck complete!</Text>
         <Text style={[styles.doneSubtitle, { color: colors.textSecondary }]}>
-          You went through {words.length} {words.length === 1 ? 'word' : 'words'}.
+          You went through {deck.length} {deck.length === 1 ? 'word' : 'words'}.
         </Text>
         <Button label="Back to Vocabulary" icon="arrow-back" onPress={onFinished} />
       </View>
     );
   }
 
-  const current = words[index]!;
-  const progress = (index / words.length) * 100;
+  const progress = (index / deck.length) * 100;
+  const noDefinitionYet = current.definitions.length === 0 && enrichFailed.has(current.id);
 
   async function handleRate(r: SrsRating) {
     if (!userId) {
@@ -77,7 +110,7 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
     <View style={[styles.wrap, { backgroundColor: colors.background }]}>
       <View style={styles.progressRow}>
         <Text style={[styles.counter, { color: colors.textSecondary }]}>
-          {index + 1} of {words.length}
+          {index + 1} of {deck.length}
         </Text>
         <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
           <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: accentColor }]} />
@@ -103,6 +136,12 @@ export function FlashcardSession({ words, accentColor, onFinished }: FlashcardSe
           back={
             <LinearGradient colors={[accentColor, palette.violet500]} style={[styles.face, { borderColor: 'transparent' }]}>
               <Text style={styles.headwordBack}>{current.headword}</Text>
+              {enriching && current.definitions.length === 0 && (
+                <Text style={styles.example}>Looking up this word…</Text>
+              )}
+              {noDefinitionYet && (
+                <Text style={styles.example}>No definition available for this word yet.</Text>
+              )}
               {current.definitions.map((d, i) => (
                 <Text key={i} style={styles.definition}>
                   {i + 1}. {d}

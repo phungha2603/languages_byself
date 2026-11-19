@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { VocabService } from "./vocab.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequireSelfGuard } from "../auth/require-self.guard";
@@ -38,5 +38,14 @@ export class VocabController {
   listReviewableWords(@Query("userId") userId: string, @Query("uptoLevelId") uptoLevelId: string) {
     if (!uptoLevelId) throw new BadRequestException("uptoLevelId query param is required");
     return this.vocabService.listReviewableWords(userId, uptoLevelId);
+  }
+
+  /**
+   * Public, like the other reference-data routes — this just fills in a shared cache field on
+   * a VocabItem (definition/example/translation), not anything user-specific.
+   */
+  @Post(":id/enrich")
+  enrichWord(@Param("id") id: string) {
+    return this.vocabService.enrichWord(id);
   }
 }

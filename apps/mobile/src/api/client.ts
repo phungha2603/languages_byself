@@ -194,6 +194,10 @@ export class ApiClient {
     return this.request(`/vocab/review?userId=${encodeURIComponent(userId)}&uptoLevelId=${encodeURIComponent(uptoLevelId)}`);
   }
 
+  enrichVocabWord(vocabId: string): Promise<VocabItem> {
+    return this.request(`/vocab/${vocabId}/enrich`, { method: "POST" });
+  }
+
   updateProfile(userId: string, data: { displayName?: string; status?: string }): Promise<User> {
     return this.request(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) });
   }

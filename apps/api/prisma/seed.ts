@@ -1,7 +1,28 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { DEFAULT_IELTS_STAGES, type BandExitCriteria } from "@app/shared-types";
 
 const prisma = new PrismaClient();
+
+interface BulkVocabEntry {
+  headword: string;
+  partOfSpeech: string;
+  chapter: string;
+  chapterOrder: number;
+  wordOrder: number;
+}
+
+/**
+ * The rest of each level's word bank beyond the 160 hand-curated "story chapter" words below —
+ * headword + part of speech + chapter only, sourced from two free CEFR datasets (see
+ * prisma/data/sources/README.md for provenance and how to regenerate this file). These words
+ * have no definitions/examples/translations yet; VocabService.enrichWord fetches and caches
+ * those the first time a learner actually opens that word's flashcard.
+ */
+const BULK_VOCAB_BANK: Record<string, BulkVocabEntry[]> = JSON.parse(
+  readFileSync(join(__dirname, "data/bulk-vocab.json"), "utf-8"),
+);
 
 /**
  * Exit criteria get stricter at every stage: higher accuracy bars, more
@@ -408,16 +429,51 @@ async function main() {
     }
   }
   console.log(
-    `Seeded ${vocabCount} CEFR-leveled vocabulary items across ${chapterCount} chapters in ${Object.keys(CEFR_VOCAB_BANK).length} levels.`,
+    `Seeded ${vocabCount} hand-curated vocabulary items across ${chapterCount} story chapters in ${Object.keys(CEFR_VOCAB_BANK).length} levels.`,
   );
 
-  // Prune older placeholder words that predate this vocabulary bank (e.g. the original A1-C1
-  // stage-based lists) so a redeploy doesn't leave stray, unlinked words behind.
-  const currentHeadwords = Object.values(CEFR_VOCAB_BANK).flatMap((chapters) =>
+  // The bulk word banks are large (thousands of rows per level) and, unlike the curated set
+  // above, are write-once: an already-seeded bulk word is left untouched so it doesn't stomp on
+  // a definition VocabService.enrichWord cached for it after a previous deploy. Only genuinely
+  // new headwords get inserted, via a single bulk createMany per level rather than one
+  // find+create/update round trip per word.
+  const existingHeadwords = new Set(
+    (await prisma.vocabItem.findMany({ select: { headword: true } })).map((r) => r.headword.toLowerCase()),
+  );
+  let bulkCreated = 0;
+  let bulkChapterCount = 0;
+  for (const [levelId, items] of Object.entries(BULK_VOCAB_BANK)) {
+    const cefrLevel = VOCAB_LEVELS_SEED.find((l) => l.id === levelId)?.cefrLevel;
+    bulkChapterCount += new Set(items.map((item) => item.chapter)).size;
+    const toCreate = items.filter((item) => !existingHeadwords.has(item.headword.toLowerCase()));
+    if (toCreate.length === 0) continue;
+    await prisma.vocabItem.createMany({
+      data: toCreate.map((item) => ({
+        headword: item.headword,
+        partOfSpeech: item.partOfSpeech,
+        definitions: [],
+        examples: [],
+        translations: {},
+        cefrLevel,
+        chapter: item.chapter,
+        chapterOrder: item.chapterOrder,
+        wordOrder: item.wordOrder,
+        vocabLevelId: levelId,
+      })),
+    });
+    bulkCreated += toCreate.length;
+    for (const item of toCreate) existingHeadwords.add(item.headword.toLowerCase());
+  }
+  console.log(`Seeded ${bulkCreated} bulk vocabulary items across ${bulkChapterCount} dataset chapters (word definitions load on demand).`);
+
+  // Prune words that are in neither bank — e.g. the original A1/A2/B1-only placeholder lists
+  // from earlier redesigns — so a redeploy doesn't leave stray, unlinked words behind.
+  const curatedHeadwords = Object.values(CEFR_VOCAB_BANK).flatMap((chapters) =>
     Object.values(chapters).flatMap((words) => words.map((w) => w.headword)),
   );
+  const bulkHeadwords = Object.values(BULK_VOCAB_BANK).flatMap((items) => items.map((i) => i.headword));
   const { count: prunedCount } = await prisma.vocabItem.deleteMany({
-    where: { headword: { notIn: currentHeadwords } },
+    where: { headword: { notIn: [...curatedHeadwords, ...bulkHeadwords] } },
   });
   if (prunedCount > 0) console.log(`Pruned ${prunedCount} superseded vocabulary item(s).`);
 

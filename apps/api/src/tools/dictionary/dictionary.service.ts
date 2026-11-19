@@ -12,6 +12,13 @@ interface DictionaryApiEntry {
   }[];
 }
 
+export interface ProviderWordInfo {
+  definitions: string[];
+  examples: string[];
+  ipa?: string;
+  partOfSpeech?: string;
+}
+
 /**
  * Free, keyless dictionary lookup backed by dictionaryapi.dev, with a
  * Postgres cache (VocabItem) in front so repeat lookups and curated IELTS
@@ -34,39 +41,51 @@ export class DictionaryService {
       return { query: word, found: true, entries: cached.map((c) => this.toVocabItem(c)), source: "cache" };
     }
 
-    try {
-      const response = await fetch(`${DictionaryService.API_BASE}/${encodeURIComponent(normalized)}`);
-      if (!response.ok) {
-        return { query: word, found: false, entries: [], source: "provider" };
-      }
-
-      const entries = (await response.json()) as DictionaryApiEntry[];
-      const vocabItems = await Promise.all(entries.map((entry) => this.persistFromProvider(entry)));
-      return { query: word, found: vocabItems.length > 0, entries: vocabItems, source: "provider" };
-    } catch (err) {
-      this.logger.warn(`Dictionary lookup failed for "${word}": ${(err as Error).message}`);
+    const info = await this.fetchFromProvider(normalized);
+    if (!info) {
       return { query: word, found: false, entries: [], source: "provider" };
     }
-  }
-
-  private async persistFromProvider(entry: DictionaryApiEntry): Promise<VocabItem> {
-    const definitions = entry.meanings.flatMap((m) => m.definitions.map((d) => d.definition));
-    const examples = entry.meanings.flatMap((m) => m.definitions.map((d) => d.example).filter((e): e is string => !!e));
-    const ipa = entry.phonetic ?? entry.phonetics?.find((p) => p.text)?.text;
-    const partOfSpeech = entry.meanings[0]?.partOfSpeech;
 
     const row = await this.prisma.vocabItem.create({
       data: {
-        headword: entry.word,
-        ipa,
-        partOfSpeech,
-        definitions,
+        headword: normalized,
+        ipa: info.ipa,
+        partOfSpeech: info.partOfSpeech,
+        definitions: info.definitions,
         translations: {},
-        examples,
+        examples: info.examples,
       },
     });
+    return { query: word, found: true, entries: [this.toVocabItem(row)], source: "provider" };
+  }
 
-    return this.toVocabItem(row);
+  /**
+   * Raw provider lookup with no caching/persistence — used both by `lookup()` above and by
+   * VocabService.enrichWord to fill in a bulk-seeded word's definition the first time someone
+   * studies it, without creating a second VocabItem row for the same word.
+   */
+  async fetchFromProvider(word: string): Promise<ProviderWordInfo | null> {
+    const normalized = word.trim().toLowerCase();
+    try {
+      const response = await fetch(`${DictionaryService.API_BASE}/${encodeURIComponent(normalized)}`);
+      if (!response.ok) return null;
+
+      const entries = (await response.json()) as DictionaryApiEntry[];
+      if (entries.length === 0) return null;
+
+      const definitions = entries.flatMap((e) => e.meanings.flatMap((m) => m.definitions.map((d) => d.definition)));
+      const examples = entries.flatMap((e) =>
+        e.meanings.flatMap((m) => m.definitions.map((d) => d.example).filter((ex): ex is string => !!ex)),
+      );
+      const ipa = entries[0]?.phonetic ?? entries[0]?.phonetics?.find((p) => p.text)?.text;
+      const partOfSpeech = entries[0]?.meanings[0]?.partOfSpeech;
+
+      if (definitions.length === 0) return null;
+      return { definitions, examples, ipa, partOfSpeech };
+    } catch (err) {
+      this.logger.warn(`Dictionary lookup failed for "${word}": ${(err as Error).message}`);
+      return null;
+    }
   }
 
   private toVocabItem(row: {

@@ -1,10 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { resolveAnchorVocabLevel, VOCAB_UNLOCK_THRESHOLD, type VocabChapterGroup, type VocabLevelProgress } from "@app/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
+import { DictionaryService } from "../tools/dictionary/dictionary.service";
+import { TranslationService } from "../tools/translation/translation.service";
 
 @Injectable()
 export class VocabService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dictionary: DictionaryService,
+    private readonly translation: TranslationService,
+  ) {}
 
   /** The 4-level progression (B1 -> C2), in order. */
   async listLevels() {
@@ -73,9 +79,13 @@ export class VocabService {
     const result: VocabLevelProgress[] = [];
     let previousMet = true;
     for (const level of levels) {
-      const words = await this.listByLevel(level.id);
-      const masteredWords = words.filter((w) => mastered.has(w.id)).length;
-      const masteryPercent = words.length === 0 ? 0 : Math.round((masteredWords / words.length) * 100);
+      // Only the ids are needed here (levels can hold thousands of words), not full rows.
+      const wordIds = await this.prisma.vocabItem.findMany({
+        where: { vocabLevelId: level.id },
+        select: { id: true },
+      });
+      const masteredWords = wordIds.filter((w) => mastered.has(w.id)).length;
+      const masteryPercent = wordIds.length === 0 ? 0 : Math.round((masteredWords / wordIds.length) * 100);
       const met = masteryPercent >= VOCAB_UNLOCK_THRESHOLD;
       const atOrBelowAnchor = level.order <= anchorOrder;
       const unlocked: boolean = atOrBelowAnchor || previousMet;
@@ -85,7 +95,7 @@ export class VocabService {
         cefrLevel: level.cefrLevel as VocabLevelProgress["cefrLevel"],
         bandLabel: level.bandLabel,
         storyTitle: level.storyTitle,
-        totalWords: words.length,
+        totalWords: wordIds.length,
         masteredWords,
         masteryPercent,
         status: !unlocked ? "locked" : met ? "completed" : "unlocked",
@@ -107,10 +117,11 @@ export class VocabService {
     const eligibleLevelIds = (uptoLevel ? levels.filter((l) => l.order <= uptoLevel.order) : levels).map((l) => l.id);
 
     const mastered = await this.masteredVocabIds(userId);
-    const words = await this.prisma.vocabItem.findMany({
-      where: { vocabLevelId: { in: eligibleLevelIds } },
+    // Filter by the (usually much smaller) mastered-id set at the DB level, rather than pulling
+    // every word in scope — levels can hold thousands of rows now.
+    const reviewable = await this.prisma.vocabItem.findMany({
+      where: { vocabLevelId: { in: eligibleLevelIds }, id: { in: Array.from(mastered) } },
     });
-    const reviewable = words.filter((w) => mastered.has(w.id));
 
     // Fisher-Yates shuffle so repeat sessions don't always open with the same word.
     for (let i = reviewable.length - 1; i > 0; i--) {
@@ -120,5 +131,46 @@ export class VocabService {
       reviewable[j] = tmp;
     }
     return reviewable;
+  }
+
+  /**
+   * Most of the vocabulary bank (everything beyond the 160 hand-curated "story chapter" words)
+   * is seeded with just a headword, part of speech and CEFR level — there's no free dataset with
+   * definitions/examples/Vietnamese for thousands of words. The first time a learner actually
+   * opens one of those flashcards, this fetches a definition from the free dictionary API and a
+   * best-effort Vietnamese translation, then caches both on the same row so it's instant after
+   * that. Already-enriched (or hand-curated) words are returned unchanged.
+   */
+  async enrichWord(vocabId: string) {
+    const item = await this.prisma.vocabItem.findUnique({ where: { id: vocabId } });
+    if (!item) throw new NotFoundException(`Vocab item ${vocabId} not found`);
+
+    const alreadyEnriched = Array.isArray(item.definitions) && item.definitions.length > 0;
+    if (alreadyEnriched) return item;
+
+    const info = await this.dictionary.fetchFromProvider(item.headword);
+    if (!info) return item; // Not found in the provider — leave as-is; the UI shows a fallback.
+
+    let translations: Record<string, string> = {};
+    try {
+      const firstDefinition = info.definitions[0];
+      if (firstDefinition) {
+        const result = await this.translation.translate({ text: firstDefinition, sourceLang: "English", targetLang: "Vietnamese" });
+        translations = { vi: result.translatedText };
+      }
+    } catch {
+      // Best-effort only (e.g. no OPENAI_API_KEY configured) — an English-only definition is still useful.
+    }
+
+    return this.prisma.vocabItem.update({
+      where: { id: vocabId },
+      data: {
+        definitions: info.definitions.slice(0, 3),
+        examples: info.examples.slice(0, 2),
+        ipa: item.ipa ?? info.ipa,
+        partOfSpeech: item.partOfSpeech ?? info.partOfSpeech,
+        translations,
+      },
+    });
   }
 }
